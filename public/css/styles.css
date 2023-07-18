@@ -1,0 +1,48 @@
+* {
+	padding: 0;
+	margin: 0;
+	box-sizing: border-box;
+	font-family: montserrat;
+}
+
+.colorMain {
+	background-color: #dfdfdf;
+}
+
+.colorHeader {
+	background-color: #c9c9c9;
+}
+
+#Logo {
+	width: 50px;
+	height: 40px;
+	font-size: 0;
+	position: absolute;
+	margin: 0;
+	margin-top: 5px;
+	left: 20px;
+	z-index: 2;
+	
+}
+
+/* Css header */
+
+
+.marginHeader {
+	margin-top: 80px;
+}
+
+.deleteBorder {
+	border: 0;
+}
+
+.largoCardProyecto {
+	width: 26rem;
+}
+
+.ulStyle {
+	list-style: none;
+}
+
+/* Css 2da sección */
+
