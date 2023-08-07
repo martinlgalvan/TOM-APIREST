@@ -3,7 +3,7 @@ import {getDate} from './../date/formatedDate.js'
 
 const options = { keepAlive: true };
 
-const client = new MongoClient('mongodb://martinlgalvan:Onenote11@168.197.48.203:27017/',options)
+const client = new MongoClient('mongodb+srv://martinlgalvan:onenote11@tom-cluster.nreeedp.mongodb.net/?retryWrites=true&w=majority',options)
 const db = client.db('TOM')
 const routine = db.collection('Routine')
 
