@@ -8,7 +8,7 @@ const router = express.Router()
 
 //  Ejercicio
 router.route('/api/week/:week_id/day/:day_id/exercise/')
-    .put([isLogin, isAdmin],RoutineController.editById)
+    .put(RoutineController.editById)
     .delete([isLogin,isAdmin], RoutineController.deleteExercise)
 
 router.route('/api/week/:week_id/day/:day_id')

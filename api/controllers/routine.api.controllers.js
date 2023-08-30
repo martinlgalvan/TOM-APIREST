@@ -296,11 +296,11 @@ function editById(req, res){
     const week_id = req.params.week_id
     const day_id = req.params.day_id
 
-    const exercise = {
-        exercises: [{}]
+    let exercise = {
+        
     }
-    if(req.body.exercises){
-        exercise.exercises = req.body.exercises
+    if(req.body){
+        exercise = req.body
     }
 
     RoutineServices.editExercise(week_id, day_id, exercise)
