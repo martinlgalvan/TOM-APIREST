@@ -296,9 +296,8 @@ function editById(req, res){
     const week_id = req.params.week_id
     const day_id = req.params.day_id
 
-    let exercise = {
-        
-    }
+    let exercise = {}
+    
     if(req.body){
         exercise = req.body
     }
