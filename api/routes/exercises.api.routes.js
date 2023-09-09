@@ -9,7 +9,10 @@ const router = express.Router()
 //  Ejercicio
 router.route('/api/week/:week_id/day/:day_id/exercise/')
     .put(RoutineController.editById)
+
+router.route('/api/week/:week_id/day/:day_id/exercise/:exercise_id')
     .delete([isLogin,isAdmin], RoutineController.deleteExercise)
+
 
 router.route('/api/week/:week_id/day/:day_id')
     .get([isLogin, isAdmin],RoutineController.findExercises)
