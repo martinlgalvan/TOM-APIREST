@@ -92,9 +92,8 @@ function createClonLastWeek(req, res){
     //Guardo el alumno
     RoutineServices.getRoutineByUserId(user_id) 
                 .then((data) =>{
-                    let ultimoIndex = data.length - 1
-                    let ultimoArr = data[ultimoIndex]
-
+                    //let ultimoIndex = data.length - 1
+                    let ultimoArr = data[0]
                     ultimoArr._id = new ObjectId()
                     ultimoArr.name = `Semana ${data.length + 1}`
             

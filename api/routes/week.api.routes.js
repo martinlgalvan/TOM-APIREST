@@ -14,11 +14,11 @@ router.route('/api/week/:week_id')
 
 //Para crear una semana de la rutina de un usuario
 router.route('/api/user/:userId/routine')
-    .get([isLogin],RoutineController.findRoutineByUserId)
+    .get(RoutineController.findRoutineByUserId)
     .post([isLogin, isAdmin],RoutineController.createWeek)
 
 router.route('/api/user/:userId/routine/clon')
-    .post([isLogin, isAdmin],RoutineController.createClonLastWeek)
+    .post(RoutineController.createClonLastWeek)
 
 // Días 
 

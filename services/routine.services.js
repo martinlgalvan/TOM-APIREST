@@ -35,8 +35,7 @@ async function getRoutineByUserId(id) {
     return client.connect()
       .then(function() {
         return routine.find({ user_id: new ObjectId(id) })
-        .sort({ "created_at.fecha": -1, "created_at.hora": -1 })
-          .toArray();
+        .sort({ "created_at.fecha": -1, "created_at.hora": -1 }).toArray();
       });
   } 
   
