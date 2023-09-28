@@ -8,7 +8,7 @@ const router = express.Router()
 
 //  Ejercicio
 router.route('/api/week/:week_id/day/:day_id/exercise/')
-    .put(RoutineController.editById)
+    .put([isLogin,isAdmin], RoutineController.editById)
 
 router.route('/api/week/:week_id/day/:day_id/exercise/:exercise_id')
     .delete([isLogin,isAdmin], RoutineController.deleteExercise)
@@ -38,8 +38,10 @@ router.route('/api/week/:week_id/day/:day_id/warmup')
 router.route('/api/week/:week_id/warmup/:warmup_id')
     .get([isLogin, isAdmin],RoutineController.findWarmup)
 
+router.route('/api/week/:week_id/day/:day_id/warmup/')
+    .put(RoutineController.editWarmUp)
+
 router.route('/api/week/:week_id/day/:day_id/warmup/:warmup_id')
-    .put([isLogin, isAdmin],RoutineController.editWarmUp)
     .delete([isLogin,isAdmin], RoutineController.deletewarmUp)
 
 export default router

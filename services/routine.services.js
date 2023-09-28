@@ -192,18 +192,15 @@ async function createWarmUp(week_id, day_id, warmup, id ){
         })  
 }
 
-async function editWarmUp(week_id,day_id, warmup_id, warmup){
 
-    const newWarmup = {
-        ...warmup,
-        warmup_id: new ObjectId(warmup_id)
-    }
+
+async function editWarmUp(week_id,day_id, warmup){
 
     return client.connect()
         .then(function(){
             return routine.updateOne(
-                {  _id: new ObjectId(week_id), $or: [{"routine.warmup.warmup_id": warmup_id}, {"routine.warmup.warmup_id": new ObjectId(warmup_id)}]  },
-                { $set: { "routine.$[day].warmup.$[element]" : newWarmup } }, { arrayFilters: [ {"day._id": new ObjectId(day_id)}, {"element.warmup_id": new ObjectId(warmup_id)} ] })
+                {  _id: new ObjectId(week_id) },
+                { $set: { "routine.$[day].warmup" : warmup } }, { arrayFilters: [{"day._id": new ObjectId(day_id)}]})
              
         })
 }

@@ -409,46 +409,15 @@ function editWarmUp(req, res){
     
     const week_id = req.params.week_id
     const day_id = req.params.day_id
-    const warmup_id = req.params.warmup_id
 
-    const warmUp = {}
 
-    if(req.body.name){
-        warmUp.name = req.body.name
-    } 
-
-    if(req.body.sets){
-        warmUp.sets = req.body.sets
-    } 
-
-    if(req.body.reps){
-        warmUp.reps = req.body.reps
-    } 
-
-    if(req.body.peso){
-        warmUp.peso = req.body.peso
-    } 
-
-    if(req.body.video){
-        warmUp.video = req.body.video
-    } 
+    let warmUp = {}
     
-    if(req.body.notas){
-        warmUp.notas = req.body.notas
-    } 
+    if(req.body){
+        warmUp = req.body
+    }
 
-    if(req.body.numberWarmup){
-        warmUp.numberWarmup = req.body.numberWarmup
-    } 
-
-    if(req.body.valueWarmup){
-        warmUp.valueWarmup = req.body.valueWarmup
-    } 
-
-    RoutineServices.editWarmUp(week_id, day_id, warmup_id, warmUp)
-        .then(function(){
-            return RoutineServices.findWarmUp(week_id, warmup_id)
-        })
+    RoutineServices.editWarmUp(week_id, day_id, warmUp)
         .then(function(warmUp) {
             if(warmUp){
                 res.status(200).json({warmUp})
