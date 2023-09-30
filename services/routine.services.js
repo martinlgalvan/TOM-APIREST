@@ -147,8 +147,8 @@ async function editExerciseInAmrap(week_id,day_id, exercise_id, exercise){
     return client.connect()
         .then(function(){
             return routine.updateOne(
-                {  _id: new ObjectId(week_id), "routine.exercises.exercise_id": exercise_id },
-                { $set: { "routine.$[day].exercises.$[element]" : newExercise } }, { arrayFilters: [{"day._id": new ObjectId(day_id)} ,{"element.exercise_id": exercise_id }]})
+                {  _id: new ObjectId(week_id), "routine.exercises.exercise_id": new ObjectId(exercise_id) },
+                { $set: { "routine.$[day].exercises.$[element]" : newExercise } }, { arrayFilters: [{"day._id": new ObjectId(day_id)} ,{"element.exercise_id": new ObjectId(exercise_id) }]})
              
         })
 }
