@@ -346,9 +346,6 @@ function editExerciseInCircuit(req, res){
     } 
 
     RoutineServices.editExerciseInAmrap(week_id, day_id, exercise_id, exercise)
-        .then(function(){
-            return RoutineServices.findExercises(week_id, exercise_id)
-        })
         .then(function(exercise) {
             if(exercise){
                 res.status(200).json({exercise})

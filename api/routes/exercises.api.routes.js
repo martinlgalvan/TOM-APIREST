@@ -27,7 +27,7 @@ router.route('/api/week/:week_id/day/:day_id/exercises/amrap')
 
 
 router.route('/api/week/:week_id/day/:day_id/exercise/:exercise_id/amrap')
-    .put([isLogin,isAdmin],RoutineController.editExerciseInCircuit)
+    .put(RoutineController.editExerciseInCircuit)
     //.delete([isLogin,isAdmin], RoutineController.deleteExercise)
 
 //Warmup part
