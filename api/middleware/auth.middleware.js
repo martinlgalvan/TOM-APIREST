@@ -36,7 +36,15 @@ function isAdmin(req, res, next) {
     next()
 }
 
+function userEditor(req, res, next) {
+    if (req.user.role !== 'editor') {
+        return res.status(401).json({ message: 'Permiso denegado' })
+    }
+    next()
+}
+
 export {
     isLogin,
-    isAdmin
+    isAdmin,
+    userEditor
 }

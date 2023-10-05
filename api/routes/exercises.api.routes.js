@@ -1,14 +1,14 @@
 import express from 'express'
 import * as RoutineController from '../controllers/routine.api.controllers.js'
 
-import {isLogin, isAdmin} from '../middleware/auth.middleware.js'
+import {isLogin, isAdmin, userEditor} from '../middleware/auth.middleware.js'
 
 const router = express.Router()
 
 
 //  Ejercicio
 router.route('/api/week/:week_id/day/:day_id/exercise/')
-    .put([isLogin,isAdmin], RoutineController.editById)
+    .put(RoutineController.editById)
 
 router.route('/api/week/:week_id/day/:day_id/exercise/:exercise_id')
     .delete([isLogin,isAdmin], RoutineController.deleteExercise)
