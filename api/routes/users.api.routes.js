@@ -39,7 +39,6 @@ router.route('/api/exercises/:exercise_id')
     .patch([isLogin, isAdmin],ListExercises.editExercise)
 
 //Columns
-/*
     router.route('/api/columnas')
     .get(ColumnController.getAllColumns)
     .post(ColumnController.createColumn)
@@ -51,7 +50,7 @@ router.route('/api/exercises/:exercise_id')
 // Cells
 
 // Ruta para crear una celda asociada a un valor de una columna
-router.post('/api/columnas/:columnValueId', CellController.createCell);*/
+router.post('/api/columnas/:columnValueId', CellController.createCell);
 
 
 export default router
