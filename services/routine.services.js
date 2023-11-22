@@ -35,7 +35,7 @@ async function getRoutineByUserId(id) {
     return client.connect()
       .then(function() {
         return routine.find({ user_id: new ObjectId(id) })
-        .sort({ "created_at.fecha": -1, "created_at.hora": -1 }).toArray();
+        .sort({ "timestamp": -1}).toArray();
       });
   } 
   
@@ -59,10 +59,13 @@ async function deleteDay(week_id, day_id ){
 
 
 async function createWeek(week,user_id){
+    const timestamp = new Date().getTime(); 
+
     const newWeek = {
         ...week,
         user_id: new ObjectId(user_id),
-        created_at: getDate()
+        created_at: getDate(),
+        timestamp: timestamp
     }
 
     return client.connect()
