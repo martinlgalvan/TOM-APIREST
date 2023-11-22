@@ -1,7 +1,8 @@
 import express from 'express'
 import * as usersController from '../controllers/users.api.controllers.js'
 import * as ListExercises from '../controllers/listExercises.api.controllers.js'
-
+import * as ColumnController from '../controllers/randomizerColumns.controller.js'
+import * as CellController from '../controllers/randomizerCells.controller.js'
 
 import {isLogin, isAdmin} from '../middleware/auth.middleware.js'
 import {ValidateLogin, ValidateRegister} from '../middleware/validar.middleware.js'
@@ -36,6 +37,20 @@ router.route('/api/exercises/:idEntrenador')
 router.route('/api/exercises/:exercise_id')
     .delete([isLogin, isAdmin],ListExercises.deleteExercise)
     .patch([isLogin, isAdmin],ListExercises.editExercise)
+
+//Columns
+    router.route('/api/columnas')
+    .get(ColumnController.getAllColumns)
+    .post(ColumnController.createColumn)
+  
+  router.route('/api/columnas/:idColumn')
+    .patch(ColumnController.editColumn)
+    .delete(ColumnController.deleteColumn)
+
+// Cells
+
+// Ruta para crear una celda asociada a un valor de una columna
+router.post('/api/columnas/:columnValueId', CellController.createCell);
 
 
 export default router
