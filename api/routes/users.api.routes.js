@@ -40,12 +40,12 @@ router.route('/api/exercises/:exercise_id')
 
 //Columns
     router.route('/api/columnas')
-    .get(ColumnController.getAllColumns)
-    .post(ColumnController.createColumn)
+    .get([isLogin, isAdmin],ColumnController.getAllColumns)
+    .post([isLogin, isAdmin],ColumnController.createColumn)
   
   router.route('/api/columnas/:idColumn')
-    .patch(ColumnController.editColumn)
-    .delete(ColumnController.deleteColumn)
+    .patch([isLogin, isAdmin],ColumnController.editColumn)
+    .delete([isLogin, isAdmin],ColumnController.deleteColumn)
 
 // Cells
 
