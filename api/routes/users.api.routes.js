@@ -1,8 +1,8 @@
 import express from 'express'
 import * as usersController from '../controllers/users.api.controllers.js'
 import * as ListExercises from '../controllers/listExercises.api.controllers.js'
-import * as ColumnController from '../controllers/randomizerColumns.controller.js'
-import * as CellController from '../controllers/randomizerCells.controller.js'
+import * as ColumnController from '../controllers/routine.api.controllers.js'
+import * as CellController from '../controllers/routine.api.controllers.js'
 
 import {isLogin, isAdmin} from '../middleware/auth.middleware.js'
 import {ValidateLogin, ValidateRegister} from '../middleware/validar.middleware.js'
