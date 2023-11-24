@@ -39,13 +39,18 @@ router.route('/api/exercises/:exercise_id')
     .patch([isLogin, isAdmin],ListExercises.editExercise)
 
 //Columns
-    router.route('/api/columnas')
+    router.route('/api/column')
     .get([isLogin, isAdmin],ColumnController.getAllColumns)
     .post([isLogin, isAdmin],ColumnController.createColumn)
   
-  router.route('/api/columnas/:idColumn')
+  router.route('/api/column/:idColumn')
+    .post([isLogin, isAdmin],ColumnController.addExerciseToColumn)
     .patch([isLogin, isAdmin],ColumnController.editColumn)
     .delete([isLogin, isAdmin],ColumnController.deleteColumn)
+
+router.route('/api/column/:idColumn/exercise/:idExercise')
+    .patch([isLogin, isAdmin],ColumnController.editExerciseInColumn)
+    .delete([isLogin, isAdmin],ColumnController.deleteExerciseInColumnById)
 
 // Cells
 

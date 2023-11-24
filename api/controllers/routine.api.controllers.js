@@ -455,12 +455,9 @@ function getAllColumns(req, res) {
 
 // Controlador para la creación de una columna
 function createColumn(req, res) {
-    const column = {
-        name: req.body.name,
-        video: req.body.video
-    };
+    const columnName = req.body.columnName;
 
-    ColumnService.createColumn(column)
+    ColumnService.createColumn(columnName)
         .then((newColumn) => {
             res.status(201).json(newColumn);
         })
@@ -496,6 +493,64 @@ function deleteColumn(req, res) {
         });
 }
 
+// Controlador para agregar objetos  a la  columna
+
+function addExerciseToColumn(req, res) {
+    const idColumn = req.params.idColumn;
+    const exercise = {
+        name: req.body.name,
+        video: req.body.video,
+        _id: new ObjectId()
+}
+    console.log(exercise)
+    ColumnService.addObjectToColumn(idColumn, exercise)
+        .then((result) => {
+            res.status(200).json(result);
+        })
+        .catch((err) => {
+            res.status(500).json({ error: err.message });
+        });
+}
+
+// Controlador para editar los ejercicios dentro de la  columna
+
+function editExerciseInColumn(req, res) {
+    const idColumn = req.params.idColumn;
+    const idExercise = req.params.idExercise;
+    const exercise = {}
+
+    if(req.body.name){
+        exercise.name = req.body.name
+    } 
+
+    if(req.body.video){
+        exercise.video = req.body.video
+    } 
+
+    console.log(idColumn,idExercise,exercise)
+
+    ColumnService.editExerciseInColumn(idColumn, idExercise, exercise)
+        .then((result) => {
+            res.status(200).json(result);
+        })
+        .catch((err) => {
+            res.status(500).json({ error: err.message });
+        });
+
+}
+
+function deleteExerciseInColumnById(req, res) {
+    const idColumn = req.params.idColumn;
+    const idExercise = req.params.idExercise;
+
+    ColumnService.deleteExerciseInColumnById(idColumn, idExercise)
+        .then((result) => {
+            res.status(200).json(result);
+        })
+        .catch((err) => {
+            res.status(500).json({ error: err.message });
+        });
+}
 
 
 //********************************* CELL */
@@ -546,6 +601,10 @@ export {
     createColumn,
     editColumn,
     deleteColumn,
+
+    addExerciseToColumn,
+    editExerciseInColumn,
+    deleteExerciseInColumnById,
 
     createCell
 }

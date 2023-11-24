@@ -17,11 +17,10 @@ async function getAllColumns() {
         });
 }
 
-// Definición del servicio para crear una columna
-async function createColumn(column) {
+async function createColumn(columnName) {
     const newColumn = {
-        name: column.name,
-        video: column.video
+        nombre: columnName,
+        exercises: [] // Un array para almacenar los objetos en la columna
     };
 
     return client.connect()
@@ -32,6 +31,7 @@ async function createColumn(column) {
             return newColumn;
         });
 }
+
 
 async function updateColumn(columnId, updatedData){
     
@@ -73,10 +73,90 @@ async function deleteColumn(columnId) {
         });
 }
 
+async function addObjectToColumn(idColumn, exercise) {
+    const filter = { _id: new ObjectId(idColumn) };
+    const updateDocument = {
+        $push: { exercises: exercise }
+    };
+
+    return client.connect()
+        .then(() => {
+            return columns.updateOne(filter, updateDocument);
+        })
+        .then((result) => {
+            if (result.modifiedCount === 0) {
+                throw new Error('La columna no fue encontrada o no se realizó ninguna modificación.');
+            }
+            return { message: 'Objeto agregado a la columna exitosamente' };
+        })
+        .catch((err) => {
+            throw new Error(`Error al agregar objeto a la columna: ${err.message}`);
+        });
+}
+
+async function editExerciseInColumn(idColumn, idExercise, updatedData) {
+    const filter = {
+        _id: new ObjectId(idColumn),
+        'exercises._id': new ObjectId(idExercise)
+    };
+
+    const exercise = {
+        ...updatedData,
+        _id: new ObjectId(idExercise)
+    }
+
+    const updateDocument = {
+        $set: {"exercises.$": exercise}
+    };
+
+    return client.connect()
+        .then(() => {
+            return columns.updateOne(filter, updateDocument);
+        })
+        .then((result) => {
+            if (result.modifiedCount === 0) {
+                throw new Error('El objeto no fue encontrado o no se realizó ninguna modificación.');
+            }
+            return { message: 'Objeto actualizado exitosamente' };
+        })
+        .catch((err) => {
+            throw new Error(`Error al actualizar el objeto: ${err.message}`);
+        });
+}
+
+async function deleteExerciseInColumnById(idColumn, idExercise) {
+    const filter = {
+        _id: new ObjectId(idColumn),
+    };
+    const updateDocument = {
+        $pull: {
+            exercises: { _id: new ObjectId(idExercise) }
+        }
+    };
+
+    return client.connect()
+        .then(() => {
+            return columns.updateOne(filter, updateDocument);
+        })
+        .then((result) => {
+            if (result.modifiedCount === 0) {
+                throw new Error('El ejercicio no fue encontrado o no se realizó ninguna modificación.');
+            }
+            return { message: 'Ejercicio eliminado exitosamente' };
+        })
+        .catch((err) => {
+            throw new Error(`Error al eliminar el ejercicio: ${err.message}`);
+        });
+}
+
 
 export {
     getAllColumns,
     createColumn,
     updateColumn,
-    deleteColumn
+    deleteColumn,
+
+    addObjectToColumn,
+    editExerciseInColumn,
+    deleteExerciseInColumnById
 }
