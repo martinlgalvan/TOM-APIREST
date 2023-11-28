@@ -19,7 +19,7 @@ async function getAllColumns() {
 
 async function createColumn(columnName) {
     const newColumn = {
-        nombre: columnName,
+        name: columnName,
         exercises: [] // Un array para almacenar los objetos en la columna
     };
 

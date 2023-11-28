@@ -455,7 +455,7 @@ function getAllColumns(req, res) {
 
 // Controlador para la creación de una columna
 function createColumn(req, res) {
-    const columnName = req.body.columnName;
+    const columnName = req.body.name;
 
     ColumnService.createColumn(columnName)
         .then((newColumn) => {
