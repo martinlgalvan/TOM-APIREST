@@ -469,7 +469,13 @@ function createColumn(req, res) {
 // Controlador para editar una columna por su ID
 function editColumn(req, res) {
     const columnId = req.params.idColumn;
-    const updatedData = req.body.updatedData; // Datos actualizados de la columna
+    const updatedData = {}
+
+    if(req.body.name){
+        updatedData.name = req.body.name
+    } 
+
+
 
     ColumnService.updateColumn(columnId, updatedData)
         .then((result) => {
