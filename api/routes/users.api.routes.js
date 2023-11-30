@@ -43,12 +43,12 @@ router.route('/api/exercises/:exercise_id')
     .get([isLogin, isAdmin],ColumnController.getAllColumns)
     .post([isLogin, isAdmin],ColumnController.createColumn)
   
-  router.route('/api/column/:idColumn')
+  router.route('/api/column/:columnId')
     .post([isLogin, isAdmin],ColumnController.addExerciseToColumn)
     .patch([isLogin, isAdmin],ColumnController.editColumn)
     .delete([isLogin, isAdmin],ColumnController.deleteColumn)
 
-router.route('/api/column/:idColumn/exercise/:idExercise')
+router.route('/api/column/:columnId/exercise/:idExercise')
     .patch([isLogin, isAdmin],ColumnController.editExerciseInColumn)
     .delete([isLogin, isAdmin],ColumnController.deleteExerciseInColumnById)
 
