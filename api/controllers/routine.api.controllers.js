@@ -468,7 +468,7 @@ function createColumn(req, res) {
 
 // Controlador para editar una columna por su ID
 function editColumn(req, res) {
-    const columnId = req.params.idColumn;
+    const columnId = req.params.columnId;
     const updatedData = {}
 
     if(req.body.name){
@@ -488,7 +488,7 @@ function editColumn(req, res) {
 
 // Controlador para eliminar una columna por su ID
 function deleteColumn(req, res) {
-    const columnId = req.params.idColumn;
+    const columnId = req.params.columnId;
 
     ColumnService.deleteColumn(columnId)
         .then((result) => {
@@ -502,14 +502,14 @@ function deleteColumn(req, res) {
 // Controlador para agregar objetos  a la  columna
 
 function addExerciseToColumn(req, res) {
-    const idColumn = req.params.idColumn;
+    const columnId = req.params.columnId;
     const exercise = {
         name: req.body.name,
         video: req.body.video,
         _id: new ObjectId()
 }
     console.log(exercise)
-    ColumnService.addObjectToColumn(idColumn, exercise)
+    ColumnService.addObjectToColumn(columnId, exercise)
         .then((result) => {
             res.status(200).json(result);
         })
@@ -521,7 +521,7 @@ function addExerciseToColumn(req, res) {
 // Controlador para editar los ejercicios dentro de la  columna
 
 function editExerciseInColumn(req, res) {
-    const idColumn = req.params.idColumn;
+    const columnId = req.params.columnId;
     const idExercise = req.params.idExercise;
     const exercise = {}
 
@@ -533,9 +533,9 @@ function editExerciseInColumn(req, res) {
         exercise.video = req.body.video
     } 
 
-    console.log(idColumn,idExercise,exercise)
+    console.log(columnId,idExercise,exercise)
 
-    ColumnService.editExerciseInColumn(idColumn, idExercise, exercise)
+    ColumnService.editExerciseInColumn(columnId, idExercise, exercise)
         .then((result) => {
             res.status(200).json(result);
         })
@@ -546,10 +546,10 @@ function editExerciseInColumn(req, res) {
 }
 
 function deleteExerciseInColumnById(req, res) {
-    const idColumn = req.params.idColumn;
+    const columnId = req.params.columnId;
     const idExercise = req.params.idExercise;
 
-    ColumnService.deleteExerciseInColumnById(idColumn, idExercise)
+    ColumnService.deleteExerciseInColumnById(columnId, idExercise)
         .then((result) => {
             res.status(200).json(result);
         })
