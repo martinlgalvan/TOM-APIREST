@@ -73,8 +73,8 @@ async function deleteColumn(columnId) {
         });
 }
 
-async function addObjectToColumn(idColumn, exercise) {
-    const filter = { _id: new ObjectId(idColumn) };
+async function addObjectToColumn(columnId, exercise) {
+    const filter = { _id: new ObjectId(columnId) };
     const updateDocument = {
         $push: { exercises: exercise }
     };
@@ -94,9 +94,9 @@ async function addObjectToColumn(idColumn, exercise) {
         });
 }
 
-async function editExerciseInColumn(idColumn, idExercise, updatedData) {
+async function editExerciseInColumn(columnId, idExercise, updatedData) {
     const filter = {
-        _id: new ObjectId(idColumn),
+        _id: new ObjectId(columnId),
         'exercises._id': new ObjectId(idExercise)
     };
 
@@ -124,9 +124,9 @@ async function editExerciseInColumn(idColumn, idExercise, updatedData) {
         });
 }
 
-async function deleteExerciseInColumnById(idColumn, idExercise) {
+async function deleteExerciseInColumnById(columnId, idExercise) {
     const filter = {
-        _id: new ObjectId(idColumn),
+        _id: new ObjectId(columnId),
     };
     const updateDocument = {
         $pull: {
