@@ -46,7 +46,7 @@ async function updateColumn(columnId, updatedData){
             if (result.modifiedCount === 0) {
                 throw new Error('La columna no fue encontrada o no se realizó ninguna modificación.');
             }
-            return { message: 'Columna actualizada exitosamente' };
+            return updatedData;
         })
         .catch((err) => {
             throw new Error(`Error al actualizar la columna: ${err.message}`);
@@ -87,7 +87,7 @@ async function addObjectToColumn(columnId, exercise) {
             if (result.modifiedCount === 0) {
                 throw new Error('La columna no fue encontrada o no se realizó ninguna modificación.');
             }
-            return { message: 'Objeto agregado a la columna exitosamente' };
+            return exercise;
         })
         .catch((err) => {
             throw new Error(`Error al agregar objeto a la columna: ${err.message}`);
@@ -117,7 +117,7 @@ async function editExerciseInColumn(columnId, idExercise, updatedData) {
             if (result.modifiedCount === 0) {
                 throw new Error('El objeto no fue encontrado o no se realizó ninguna modificación.');
             }
-            return { message: 'Objeto actualizado exitosamente' };
+            return updatedData;
         })
         .catch((err) => {
             throw new Error(`Error al actualizar el objeto: ${err.message}`);
