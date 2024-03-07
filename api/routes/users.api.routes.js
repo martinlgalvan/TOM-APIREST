@@ -52,10 +52,5 @@ router.route('/api/column/:columnId/exercise/:idExercise')
     .patch([isLogin, isAdmin],ColumnController.editExerciseInColumn)
     .delete([isLogin, isAdmin],ColumnController.deleteExerciseInColumnById)
 
-// Cells
-
-// Ruta para crear una celda asociada a un valor de una columna
-router.post('/api/columnas/:columnValueId', CellController.createCell);
-
 
 export default router

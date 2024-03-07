@@ -219,6 +219,8 @@ async function deleteWarmup(week_id,day_id, warmup_id){
         })
 }
 
+
+
 export {
     getRoutine,
     getRoutineById,
@@ -239,7 +241,7 @@ export {
     findWarmUp,
     createWarmUp,
     editWarmUp,
-    deleteWarmup
+    deleteWarmup,
 
 }
 

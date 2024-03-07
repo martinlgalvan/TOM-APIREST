@@ -1,8 +1,7 @@
 import { ObjectId } from 'mongodb'
 import * as RoutineServices from '../../services/routine.services.js'
 import * as ColumnService from '../../services/randomizerColumns.services.js'
-import * as CellService from '../../services/randomizerCells.services.js'
-
+import * as PARservices from '../../services/PAR.services.js'
 
 function findAll(req, res){
 
@@ -160,6 +159,34 @@ function deleteWeek(req, res) {
             res.status(500).json({ message: err.message })
         })
 }
+
+
+function createPARweek(req, res){
+
+    //Armo lo que quiero guardar
+    
+    const user_id = req.params.userId
+
+    const week = {
+        name: req.body.name,
+        routine: [{}]
+        // imitar el proceso antes de meterlo 
+    }
+
+    if(req.body.routine){
+        week.routine = req.body.routine
+    } 
+
+    
+    RoutineServices.createWeek(week,user_id)
+        .then((data) => {
+            res.status(201).json(data)
+        })
+
+}
+
+
+
 
 
 
@@ -559,20 +586,30 @@ function deleteExerciseInColumnById(req, res) {
 }
 
 
-//********************************* CELL */
 
-// Controlador para la creación de una celda asociada a un valor de una columna
-function createCell(req, res) {
-    const columnValueId = req.params.columnValueId;
-    const value = req.body.valor;
 
-    CellService.createCell(columnValueId, value)
-        .then((newCell) => {
-            res.status(201).json(newCell);
-        })
-        .catch((err) => {
-            res.status(500).json({ error: err.message });
-        });
+
+function createPAR(req, res){
+
+    //Armo lo que quiero guardar
+    
+    const user_id = req.params.userId
+
+    const week = {
+        name: req.body.name,
+        routine: [{}]
+        // imitar el proceso antes de meterlo 
+    }
+
+    if(req.body.routine){
+        week.routine = req.body.routine
+    } 
+
+            PARservices.createPAR(week,user_id)
+                .then((data) => {
+                    res.status(201).json(data)
+                })
+          
 }
 
 
@@ -612,5 +649,6 @@ export {
     editExerciseInColumn,
     deleteExerciseInColumnById,
 
-    createCell
+    createPAR,
+    createPARweek,
 }
