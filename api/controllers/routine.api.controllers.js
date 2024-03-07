@@ -161,29 +161,7 @@ function deleteWeek(req, res) {
 }
 
 
-function createPARweek(req, res){
 
-    //Armo lo que quiero guardar
-    
-    const user_id = req.params.userId
-
-    const week = {
-        name: req.body.name,
-        routine: [{}]
-        // imitar el proceso antes de meterlo 
-    }
-
-    if(req.body.routine){
-        week.routine = req.body.routine
-    } 
-
-    
-    RoutineServices.createWeek(week,user_id)
-        .then((data) => {
-            res.status(201).json(data)
-        })
-
-}
 
 
 
@@ -587,9 +565,22 @@ function deleteExerciseInColumnById(req, res) {
 
 
 
+function getPAR(req, res){
+    const user_id = req.params.user_id
+
+    PARservices.getPAR(user_id)
+        .then(function(user){
+            if(user){
+                res.status(200).json(user)
+            } else{
+                res.status(404).json({message: "Día no encontrado."})
+            }
+        })
+       
+}
 
 
-function createPAR(req, res){
+function createPARweek(req, res){
 
     //Armo lo que quiero guardar
     
@@ -605,11 +596,12 @@ function createPAR(req, res){
         week.routine = req.body.routine
     } 
 
-            PARservices.createPAR(week,user_id)
-                .then((data) => {
-                    res.status(201).json(data)
-                })
-          
+    
+    RoutineServices.createWeek(week,user_id)
+        .then((data) => {
+            res.status(201).json(data)
+        })
+
 }
 
 
@@ -649,6 +641,6 @@ export {
     editExerciseInColumn,
     deleteExerciseInColumnById,
 
-    createPAR,
+    getPAR,
     createPARweek,
 }

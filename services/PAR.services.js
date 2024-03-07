@@ -6,6 +6,16 @@ const client = new MongoClient('mongodb://m4rt1n:s0yM4RT1NG4LV4N@62.72.51.41:270
 const db = client.db('TOM')
 const par = db.collection('PAR')
 
+
+
+async function getPAR(id){
+    return client.connect()
+        .then(async function (){
+            return par.find({  $or: [{user_id: id}, {user_id: new ObjectId(id)}]}).toArray()
+        }) 
+}
+
+
 async function createPAR(PAR,user_id){
 
     const newPAR = {
@@ -22,6 +32,7 @@ async function createPAR(PAR,user_id){
         })
 }
 export {
+    getPAR,
     createPAR
 
 }
