@@ -597,7 +597,7 @@ function createPARweek(req, res){
     } 
 
     
-    RoutineServices.createWeek(week,user_id)
+    PARservices.createPAR(week,user_id)
         .then((data) => {
             res.status(201).json(data)
         })
