@@ -584,7 +584,7 @@ function createPARweek(req, res){
 
     //Armo lo que quiero guardar
     
-    const user_id = req.params.userId
+    const user_id = req.params.user_id
 
     const week = {
         name: req.body.name,
