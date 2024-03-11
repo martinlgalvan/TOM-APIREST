@@ -622,12 +622,12 @@ function createPARweekInRoutine(req, res){
     } 
 
     
-    RoutineServices.createPAR(week,user_id)
+    RoutineServices.createWeek(week,user_id)
         .then((data) => {
             res.status(201).json(data)
         })
 
-}
+} // AñADOR ESTP
 
 
 
