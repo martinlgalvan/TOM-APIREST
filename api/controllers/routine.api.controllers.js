@@ -605,6 +605,31 @@ function createPARweek(req, res){
 }
 
 
+function createPARweekInRoutine(req, res){
+
+    //Armo lo que quiero guardar
+    
+    const user_id = req.params.user_id
+
+    const week = {
+        name: req.body.name,
+        routine: [{}]
+        // imitar el proceso antes de meterlo 
+    }
+
+    if(req.body.routine){
+        week.routine = req.body.routine
+    } 
+
+    
+    RoutineServices.createPAR(week,user_id)
+        .then((data) => {
+            res.status(201).json(data)
+        })
+
+}
+
+
 
 
 export {
@@ -643,4 +668,5 @@ export {
 
     getPAR,
     createPARweek,
+    createPARweekInRoutine
 }

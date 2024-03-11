@@ -20,6 +20,10 @@ router.route('/api/user/:userId/routine')
 router.route('/api/user/:userId/routine/clon')
     .post(RoutineController.createClonLastWeek)
 
+    router.route('/api/user/:userId/routine/par/week')
+    .post(RoutineController.createPARweekInRoutine)
+
+
 router.route('/api/user/:user_id/routine/par')
     .get(RoutineController.getPAR)
     .post(RoutineController.createPARweek)
@@ -34,6 +38,7 @@ router.route('/api/week/:week_id/day/:day_id')
     .patch([isLogin, isAdmin], RoutineController.editDay)
     .post([isLogin,isAdmin],RoutineController.createExercise)
     .delete([isLogin, isAdmin],RoutineController.deleteDay)
+    
 
 
 // Lista de ejercicios

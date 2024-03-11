@@ -78,6 +78,8 @@ async function createWeek(week,user_id){
 }
 
 
+
+
 async function deleteWeek(weekId){
     return client.connect()
         .then(function(){
@@ -221,6 +223,24 @@ async function deleteWarmup(week_id,day_id, warmup_id){
 
 
 
+async function createPAR(PAR,user_id){
+
+    const newPAR = {
+        ...PAR,
+        user_id: new ObjectId(user_id)
+    }
+
+    return client.connect()
+        .then(function(){
+            return routine.insertOne(newPAR)
+        })
+        .then(function (){
+            return newPAR
+        })
+}
+
+
+
 export {
     getRoutine,
     getRoutineById,
@@ -242,7 +262,8 @@ export {
     createWarmUp,
     editWarmUp,
     deleteWarmup,
-
+    
+    createPAR
 }
 
 
