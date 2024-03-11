@@ -20,7 +20,7 @@ router.route('/api/user/:userId/routine')
 router.route('/api/user/:userId/routine/clon')
     .post(RoutineController.createClonLastWeek)
 
-    router.route('/api/user/:userId/routine/par/week')
+    router.route('/api/user/:user_id/routine/par/week')
     .post(RoutineController.createPARweekInRoutine)
 
 
