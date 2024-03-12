@@ -137,7 +137,7 @@ async function editExercise(week_id,day_id, exercise){
         .then(function(){
             return routine.updateOne(
                 {  _id: new ObjectId(week_id) },
-                { $set: { "routine.$[day].exercises" : exercise } }, { arrayFilters: [{"day._id": new ObjectId(day_id)}]})
+                { $set: { "routine.$[day].exercises" : exercise } }, { arrayFilters: [ { $or: [{"day._id": day_id}, {"day._id": new ObjectId(day_id)}] } ] })
              
         })
 }
