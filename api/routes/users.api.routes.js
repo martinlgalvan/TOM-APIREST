@@ -23,10 +23,12 @@ router.route('/api/users/:idEntrenador')
     .get([isLogin, isAdmin],usersController.getUsersByEntrenador)
     .post([isLogin, isAdmin],usersController.create)
 
+
 //Para encontrar y/o eliminar un usuario
 router.route('/api/user/:userId')
     .get([isLogin, isAdmin],usersController.getUserById)
     .delete([isLogin, isAdmin],usersController.removeUser)
+    .patch([isLogin, isAdmin],usersController.addUserProperty)
 
 //Base de datos de ejercicios
 router.route('/api/exercises/:idEntrenador')

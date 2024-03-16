@@ -86,13 +86,37 @@ async function remove(id) {
     await users.deleteOne({ _id: ObjectId(id) })
 }
 
+
+async function addUserProperty(userId, color, headersColor ) {
+    try {
+        const user = await findById(userId);
+
+        if (!user) {
+            throw new Error('Usuario no encontrado');
+        }
+
+        user.color = color;
+        user.headerColor = headersColor;
+
+        await users.updateOne(
+            { _id: new ObjectId(userId) }, // Filtra el usuario por su ID
+            { $set: user } // Establece los nuevos datos del usuario
+        );
+
+        return user;
+    } catch (error) {
+        throw new Error(`Error al agregar la propiedad al usuario: ${error.message}`);
+    }
+}
+
 export {
     getUsersByEntrenadorId,
     find,
     create,
     remove,
     login,
-    findById
+    findById,
+    addUserProperty
 
 }
 

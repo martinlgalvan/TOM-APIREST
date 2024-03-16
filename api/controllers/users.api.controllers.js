@@ -137,6 +137,20 @@ function removeUser(req, res) {
 
 
 
+async function addUserProperty(req, res) {
+    const userId = req.params.userId;
+    const { color, headersColor } = req.body;
+
+    try {
+        const user = await UsersService.addUserProperty(userId, color,  headersColor);
+        res.status(200).json({ message: `Propiedad '${color}' agregada correctamente al usuario`, user });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+}
+
+
+
 
 export {
     getUserById,
@@ -145,5 +159,6 @@ export {
     create,
     removeUser,
     login,
-    logout
+    logout,
+    addUserProperty
 }
