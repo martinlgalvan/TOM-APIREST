@@ -87,7 +87,7 @@ async function remove(id) {
 }
 
 
-async function addUserProperty(userId, color, headersColor ) {
+async function addUserProperty(userId, color, textColor ) {
     try {
         const user = await findById(userId);
 
@@ -96,7 +96,7 @@ async function addUserProperty(userId, color, headersColor ) {
         }
 
         user.color = color;
-        user.headerColor = headersColor;
+        user.textColor = textColor;
 
         await users.updateOne(
             { _id: new ObjectId(userId) }, // Filtra el usuario por su ID
