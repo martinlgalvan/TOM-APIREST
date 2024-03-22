@@ -28,6 +28,9 @@ router.route('/api/user/:user_id/routine/par')
     .get(RoutineController.getPAR)
     .post(RoutineController.createPARweek)
 
+router.route('/api/par/:id_par')
+    .delete(RoutineController.deletePAR)
+
 // Días 
 
 router.route('/api/week/:week_id/day')

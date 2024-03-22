@@ -89,23 +89,32 @@ async function remove(id) {
 }
 
 
-async function addUserProperty(userId, color, textColor ) {
+async function addUserProperty(userId, color, textColor) {
     try {
-        const user = await findById(userId);
-
-        if (!user) {
-            throw new Error('Usuario no encontrado');
+        const trainer = await findById(userId); // Obtener el entrenador
+        
+        if (!trainer) {
+            throw new Error('Entrenador no encontrado');
         }
-
-        user.color = color;
-        user.textColor = textColor;
-
+        
+        // Agregar las propiedades al entrenador
+        trainer.color = color;
+        trainer.textColor = textColor;
+        
+        // Actualizar el entrenador con las nuevas propiedades
         await users.updateOne(
-            { _id: new ObjectId(userId) }, // Filtra el usuario por su ID
-            { $set: user } // Establece los nuevos datos del usuario
+            { _id: new ObjectId(userId) },
+            { $set: { color: color, textColor: textColor } }
         );
-
-        return user;
+        
+        // Actualizar a todos los alumnos del entrenador
+        const updatedStudents = await users.updateMany(
+            { entrenador_id: new ObjectId(userId) }, // Filtrar alumnos por el ID del entrenador
+            { $set: { color: color, textColor: textColor } }
+        );
+        
+        // Devolver el entrenador actualizado
+        return trainer;
     } catch (error) {
         throw new Error(`Error al agregar la propiedad al usuario: ${error.message}`);
     }

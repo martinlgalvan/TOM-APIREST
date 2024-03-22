@@ -579,6 +579,18 @@ function getPAR(req, res){
        
 }
 
+function deletePAR(req, res) {
+    const id_par = req.params.id_par;
+
+    PARservices.deletePAR(id_par)
+        .then((result) => {
+            res.status(200).json(result);
+        })
+        .catch((err) => {
+            res.status(500).json({ error: err.message });
+        });
+}
+
 
 function createPARweek(req, res){
 
@@ -679,6 +691,7 @@ export {
     deleteExerciseInColumnById,
 
     getPAR,
+    deletePAR,
     createPARweek,
     createPARweekInRoutine
 }

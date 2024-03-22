@@ -31,9 +31,32 @@ async function createPAR(PAR,user_id){
             return newPAR
         })
 }
+
+
+async function deletePAR(id) {
+    const filter = { _id: new ObjectId(id) };
+
+    return client.connect()
+        .then(() => {
+            return par.deleteOne(filter);
+        })
+        .then((result) => {
+            if (result.deletedCount === 0) {
+                throw new Error('el PAR no fue encontrada o no se eliminó.');
+            }
+            return { message: 'PAR eliminada exitosamente' };
+        })
+        .catch((err) => {
+            throw new Error(`Error al eliminar el PAR: ${err.message}`);
+        });
+}
+
+
+
 export {
     getPAR,
-    createPAR
+    createPAR,
+    deletePAR
 
 }
 
