@@ -31,18 +31,19 @@ function logout(req, res) {
 //----------------------------------------------------*
 
 
-function getUserById(req, res){
-    const id = req.params.userId
+async function getUserById(req, res) {
+    const id = req.params.userId;
 
-    UsersService.findById(id)
-        .then(function(user){
-            if(user){
-                res.status(200).json(user)
-            } else{
-                res.status(404).json({message: "Usuario no encontrado."})
-            }
-        })
-       
+    try {
+        const user = await UsersService.findById(id);
+        if (user) {
+            res.status(200).json(user);
+        } else {
+            res.status(404).json({ message: "Usuario no encontrado." });
+        }
+    } catch (error) {
+        res.status(500).json({ message: "Error al obtener el usuario.", error: error.message });
+    }
 }
 
 

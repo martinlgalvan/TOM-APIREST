@@ -7,11 +7,13 @@ const db = client.db('TOM')
 const users = db.collection('Users')
 
 async function findById(id) {
-    await client.connect()
-
-    const user = await users.findOne({ _id: ObjectId(id) })
-
-    return user
+    try {
+        await client.connect();
+        const user = await users.findOne({ _id: ObjectId(id) });
+        return user;
+    } catch (error) {
+        throw new Error(`Error al buscar el usuario: ${error.message}`);
+    }
 }
 
 async function getUsersByEntrenadorId(entrenador_id) {
