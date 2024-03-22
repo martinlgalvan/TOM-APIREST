@@ -607,25 +607,37 @@ function createPARweek(req, res){
 
 function createPARweekInRoutine(req, res){
 
-    //Armo lo que quiero guardar
-    
     const user_id = req.params.user_id
 
-    const week = {
-        name: req.body.name,
-        routine: [{}]
-        // imitar el proceso antes de meterlo 
-    }
+    //Armo lo que quiero guardar
+    RoutineServices.getRoutineByUserId(user_id) 
+                .then((data) =>{
+                    
+                    const nameParWeek = `Semana ${data.length + 1}`
 
-    if(req.body.routine){
-        week.routine = req.body.routine
-    } 
+                    const week = {
+                        name: nameParWeek,
+                        routine: [{}]
+                        // imitar el proceso antes de meterlo 
+                    }
 
-    
-    RoutineServices.createWeek(week,user_id)
-        .then((data) => {
-            res.status(201).json(data)
-        })
+                    
+            if(req.body.routine){
+                week.routine = req.body.routine
+            } 
+
+
+            
+            RoutineServices.createWeek(week,user_id)
+                .then((data) => {
+                    res.status(201).json(data)
+                })
+            })
+
+
+
+
+
 
 } // AñADOR ESTP
 
