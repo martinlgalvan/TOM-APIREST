@@ -52,7 +52,7 @@ async function createDay(day, weekId){
 async function deleteDay(week_id, day_id ){
         return client.connect()
             .then(function(){
-                return routine.updateOne({ _id: new ObjectId(week_id), "routine._id": new ObjectId(day_id) },
+                return routine.updateOne({ _id: new ObjectId(week_id), $or: [{"routine._id" : day_id}, {"routine._id" : new ObjectId(day_id)}] },
                 { $pull: { "routine": {_id : new ObjectId(day_id) } }})
             })
     }    
@@ -83,7 +83,7 @@ async function createWeek(week,user_id){
 async function deleteWeek(weekId){
     return client.connect()
         .then(function(){
-            return routine.deleteOne({$or: [{_id : weekId}, {_id : new ObjectId(weekId)}]})
+            return routine.deleteOne({ _id: new ObjectId(weekId) })
         })
 }   
 
