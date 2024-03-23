@@ -83,7 +83,7 @@ async function createWeek(week,user_id){
 async function deleteWeek(weekId){
     return client.connect()
         .then(function(){
-            return routine.deleteOne({ _id: new ObjectId(weekId) })
+            return routine.deleteOne({$or: [{_id : weekId}, {_id : new ObjectId(weekId)}]})
         })
 }   
 
