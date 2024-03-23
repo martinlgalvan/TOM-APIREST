@@ -103,7 +103,7 @@ async function editDay(week_id, day_id, day){
     return client.connect()
         .then(function(){
             return routine.updateOne(
-                { "routine._id": new ObjectId(day_id) },
+                { $or: [{"routine._id": day_id}, {"routine._id": new ObjectId(day_id)}]},
                 { $set: {"routine.$.name" : day}  }
              )
         })
