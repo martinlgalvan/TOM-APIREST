@@ -53,7 +53,7 @@ async function deleteDay(week_id, day_id ){
         return client.connect()
             .then(function(){
                 return routine.updateOne({ _id: new ObjectId(week_id), $or: [{"routine._id" : day_id}, {"routine._id" : new ObjectId(day_id)}] },
-                { $pull: { "routine": {_id : new ObjectId(day_id) } }})
+                { $pull: { "routine": {$or: [{_id : day_id}, {_id : new ObjectId(day_id)}]} }})
             })
     }    
 
