@@ -41,7 +41,7 @@ router.route('/api/exercises/:exercise_id')
     .patch([isLogin, isAdmin],ListExercises.editExercise)
 
 //Columns
-    router.route('/api/column')
+    router.route('/api/:user_id/columns')
     .get([isLogin, isAdmin],ColumnController.getAllColumns)
     .post([isLogin, isAdmin],ColumnController.createColumn)
   
