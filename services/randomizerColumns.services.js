@@ -7,20 +7,21 @@ const db = client.db('TOM')
 const columns = db.collection('RandomizerColumns')
 
 // Definición del servicio para obtener todas las columnas
-async function getAllColumns() {
+async function getAllColumns(id) {
     return client.connect()
         .then(() => {
-            return columns.find({}).toArray();
+            return columns.find({  $or: [{user_id: id}, {user_id: new ObjectId(id)}]}).toArray()
         })
         .catch((err) => {
             throw new Error(`Error al obtener las columnas: ${err.message}`);
         });
 }
 
-async function createColumn(columnName) {
+async function createColumn(columnName, user_id) {
     const newColumn = {
         name: columnName,
-        exercises: [] // Un array para almacenar los objetos en la columna
+        exercises: [], // Un array para almacenar los objetos en la columna
+        user_id: new ObjectId(user_id)
     };
 
     return client.connect()
