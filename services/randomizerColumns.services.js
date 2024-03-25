@@ -10,7 +10,7 @@ const columns = db.collection('RandomizerColumns')
 async function getAllColumns(id) {
     return client.connect()
         .then(() => {
-            return columns.find({ _id: new ObjectId(id) }).toArray()
+            return columns.find({user_id: new ObjectId(id) }).toArray()
         })
         .catch((err) => {
             throw new Error(`Error al obtener las columnas: ${err.message}`);
