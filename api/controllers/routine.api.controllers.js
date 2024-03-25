@@ -463,9 +463,11 @@ function getAllColumns(req, res) {
 
 // Controlador para la creación de una columna
 function createColumn(req, res) {
+
+    const user_id = req.params.user_id;
     const columnName = req.body.name;
 
-    ColumnService.createColumn(columnName)
+    ColumnService.createColumn(columnName,user_id)
         .then((newColumn) => {
             res.status(201).json(newColumn);
         })
