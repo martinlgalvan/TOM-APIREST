@@ -449,7 +449,7 @@ async function deletewarmUp(req, res){
 // Controlador para obtener todas las columnas
 function getAllColumns(req, res) {
 
-    const user_id = req.body.user_id;
+    const user_id = req.params.user_id;
 
     ColumnService.getAllColumns(user_id)
         .then((columns) => {
