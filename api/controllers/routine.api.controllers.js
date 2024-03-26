@@ -246,7 +246,7 @@ async function createExercise(req, res){
                 
                 const exercise = {
                     type: 'exercise',
-                    aa:  "aa",
+                    aa:  "aaa",
                     name: req.body.name,
                     sets: req.body.sets,
                     reps: req.body.reps,
