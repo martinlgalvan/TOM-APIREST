@@ -249,6 +249,7 @@ async function createExercise(req, res){
                     name: req.body.name,
                     sets: req.body.sets,
                     reps: req.body.reps,
+                    rest: req.body.rest,
                     peso: req.body.peso,
                     video: req.body.video,
                     notas: req.body.notas,
