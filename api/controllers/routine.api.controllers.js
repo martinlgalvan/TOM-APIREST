@@ -246,7 +246,6 @@ async function createExercise(req, res){
                 
                 const exercise = {
                     type: 'exercise',
-                    aa:  "aaa",
                     name: req.body.name,
                     sets: req.body.sets,
                     reps: req.body.reps,
@@ -587,7 +586,6 @@ function getPAR(req, res){
 }
 
 function deletePAR(req, res) {
-    
     const id_par = req.params.id_par;
 
     PARservices.deletePAR(id_par)
