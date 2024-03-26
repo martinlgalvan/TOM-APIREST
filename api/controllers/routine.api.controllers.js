@@ -586,6 +586,7 @@ function getPAR(req, res){
 }
 
 function deletePAR(req, res) {
+    
     const id_par = req.params.id_par;
 
     PARservices.deletePAR(id_par)
