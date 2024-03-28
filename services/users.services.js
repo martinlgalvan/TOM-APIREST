@@ -58,11 +58,13 @@ async function find(filter) {
     return usersCollection
 }
 
-async function create(user,entrenador_id,logo) {
+async function create(user,entrenador_id,logo, color, textColor) {
     const newUser = { 
         ...user,
         entrenador_id: new ObjectId(entrenador_id),
         logo: logo,
+        color: color,
+        textColor: textColor,
         created_at: getDate()}
 
     await client.connect()

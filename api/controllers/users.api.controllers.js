@@ -104,7 +104,8 @@ function getUsersByEntrenador(req, res) {
 function create(req, res) {
     const entrenador_id = req.params.idEntrenador
     const logo = req.body.logo
-
+    const color = req.body.color
+    const textColor = req.body.textColor
     const user = {
         name: req.body.name,
         email: req.body.email,
@@ -112,7 +113,7 @@ function create(req, res) {
         role: "common"
     }
 
-    UsersService.create(user, entrenador_id, logo)
+    UsersService.create(user, entrenador_id, logo, color, textColor)
         .then(user => {
             console.log(user)
             res.json(user)
