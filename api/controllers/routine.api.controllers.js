@@ -319,52 +319,50 @@ function editById(req, res){
 
 }
 
-function editExerciseInCircuit(req, res){
-    
-    const week_id = req.params.week_id
-    const day_id = req.params.day_id
-    const exercise_id = req.params.exercise_id
+function editExerciseInCircuit(req, res) {
+    const week_id = req.params.week_id;
+    const day_id = req.params.day_id;
+    const exercise_id = req.params.exercise_id;
 
-    const exercise = {}
+    const exercise = {};
 
-    if(req.body.type){
-        exercise.type = req.body.type
-    } 
+    if (req.body.type) {
+        exercise.type = req.body.type;
+    }
 
-    if(req.body.typeOfSets){
-        exercise.typeOfSets = req.body.typeOfSets
-    } 
+    if (req.body.typeOfSets) {
+        exercise.typeOfSets = req.body.typeOfSets;
+    }
 
-    if(req.body.circuit){
-        exercise.circuit = req.body.circuit
-    } 
+    if (req.body.circuit) {
+        exercise.circuit = req.body.circuit;
+    }
 
-    if(req.body.notas){
-        exercise.notas = req.body.notas
-    } 
+    if (req.body.notas) {
+        exercise.notas = req.body.notas;
+    }
 
-    if(req.body.numberExercise){
-        exercise.numberExercise = req.body.numberExercise
-    } 
-    
+    if (req.body.numberExercise) {
+        exercise.numberExercise = req.body.numberExercise;
+    }
 
-    if(req.body.valueExercise){
-        exercise.valueExercise = req.body.valueExercise
-    } 
+    if (req.body.valueExercise) {
+        exercise.valueExercise = req.body.valueExercise;
+    }
 
     RoutineServices.editExerciseInAmrap(week_id, day_id, exercise_id, exercise)
-        .then(function(){
-            return RoutineServices.findExercises(week_id, day_id)
-        })
         .then(function(exercise) {
-            if(exercise){
-                res.status(200).json({exercise})
+            if (exercise) {
+                res.status(200).json({ exercise });
             } else {
-                res.status(404).json({ message: "Ejercicio no encontrado."})
+                res.status(404).json({ message: "Ejercicio no encontrado." });
             }
         })
-
+        .catch(function(error) {
+            res.status(500).json({ message: error.message });
+        });
 }
+
 
 
 async function deleteExercise(req, res){
