@@ -161,14 +161,6 @@ function deleteWeek(req, res) {
 }
 
 
-
-
-
-
-
-
-
-
 function createDay(req, res){
 
     //Armo lo que quiero guardar
@@ -232,6 +224,8 @@ async function findExercises(req, res){
     const exercise = await RoutineServices.findExercises(week_id,day_id)
     res.status(200).json(exercise)
 }
+
+
 
 async function createExercise(req, res){
     const week_id = req.params.week_id
@@ -517,7 +511,6 @@ function addExerciseToColumn(req, res) {
         video: req.body.video,
         _id: new ObjectId()
 }
-    console.log(exercise)
     ColumnService.addObjectToColumn(columnId, exercise)
         .then((result) => {
             res.status(200).json(result);

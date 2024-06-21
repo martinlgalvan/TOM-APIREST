@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt'
 const client = new MongoClient('mongodb://m4rt1n:s0yM4RT1NG4LV4N@62.72.51.41:27017/')
 const db = client.db('TOM')
 const users = db.collection('Users')
+const userProfile = db.collection('usersProfile')
 
 async function findById(id) {
     try {
@@ -120,6 +121,38 @@ async function addUserProperty(userId, color, textColor) {
     } catch (error) {
         throw new Error(`Error al agregar la propiedad al usuario: ${error.message}`);
     }
+    
+}
+async function upsertUserDetails(userId, details) {
+    const timestamp = new Date().getTime(); 
+    const newDetails = { 
+        ...details,
+        last_edit: getDate(),
+        timestamp: timestamp
+    }
+    try {
+        // Buscar y actualizar los detalles del usuario, o crear uno nuevo si no existe
+        const userDetails = await userProfile.findOneAndUpdate(
+            { user_id: new ObjectId(userId)},
+            { $set: newDetails },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
+
+        // Devolver los detalles del usuario actualizados o creados
+        return userDetails;
+    } catch (error) {
+        throw new Error(`Error al actualizar o crear los detalles del usuario: ${error.message}`);
+    }
+}
+
+async function findProfileByID(id) {
+    try {
+        await client.connect();
+        const user = await userProfile.findOne({ user_id: ObjectId(id) });
+        return user;
+    } catch (error) {
+        throw new Error(`Error al buscar el usuario: ${error.message}`);
+    }
 }
 
 export {
@@ -129,7 +162,9 @@ export {
     remove,
     login,
     findById,
-    addUserProperty
+    addUserProperty,
+    findProfileByID,
+    upsertUserDetails
 
 }
 

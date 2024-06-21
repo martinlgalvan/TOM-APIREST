@@ -151,6 +151,33 @@ async function addUserProperty(req, res) {
     }
 }
 
+async function getProfileByUserId(req, res) {
+    const id = req.params.userId;
+
+    try {
+        const user = await UsersService.findProfileByID(id);
+        if (user) {
+            res.status(200).json(user);
+        } else {
+            res.status(404).json({ message: "Perfil no encontrado." });
+        }
+    } catch (error) {
+        res.status(500).json({ message: "Error al obtener el perfil.", error: error.message });
+    }
+}
+
+
+async function upsertUserDetails(req, res) {
+    const userId = req.params.userId;
+    const details = req.body;
+
+    try {
+        const userDetails = await UsersService.upsertUserDetails(userId, details);
+        res.status(200).json({ message: `Detalles actualizados o creados correctamente`, userDetails });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+}
 
 
 
@@ -162,5 +189,7 @@ export {
     removeUser,
     login,
     logout,
-    addUserProperty
+    addUserProperty,
+    getProfileByUserId,
+    upsertUserDetails
 }

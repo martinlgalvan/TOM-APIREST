@@ -1,5 +1,6 @@
 import express from 'express'
 import * as RoutineController from '../controllers/routine.api.controllers.js'
+import * as usersController from '../controllers/users.api.controllers.js'
 import * as ListExercisesController from '../controllers/listExercises.api.controllers.js'
 import {isLogin, isAdmin} from '../middleware/auth.middleware.js'
 
@@ -16,9 +17,11 @@ router.route('/api/week/:week_id')
 router.route('/api/user/:userId/routine')
     .get(RoutineController.findRoutineByUserId)
     .post([isLogin, isAdmin],RoutineController.createWeek)
+    .patch(usersController.upsertUserDetails);
 
 router.route('/api/user/:userId/routine/clon')
-    .post(RoutineController.createClonLastWeek)
+    .get(usersController.getProfileByUserId)
+    .post([isLogin],RoutineController.createClonLastWeek)
 
     router.route('/api/user/:user_id/routine/par/week')
     .post(RoutineController.createPARweekInRoutine)
