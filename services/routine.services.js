@@ -87,7 +87,18 @@ async function deleteWeek(weekId){
         })
 }   
 
-async function editWeek(weekID, week){
+async function editWeek(weekID, routineArray) {
+    return client.connect()
+        .then(function () {
+            return routine.updateOne(
+                { _id: new ObjectId(weekID) },
+                { $set: { routine: routineArray } } // Actualiza solo el campo 'routine'
+            );
+        });
+}
+
+async function editWeekName(weekID, week){
+    console.log(weekID, week)
     
     return client.connect()
         .then(function(){
@@ -97,6 +108,8 @@ async function editWeek(weekID, week){
              )
         })
 }
+
+
 
 async function editDay(week_id, day_id, day){
 
@@ -207,7 +220,7 @@ async function editWarmUp(week_id,day_id, warmup){
         .then(function(){
             return routine.updateOne(
                 {  _id: new ObjectId(week_id) },
-                { $set: { "routine.$[day].warmup" : warmup } }, { arrayFilters: [{"day._id": new ObjectId(day_id)}]})
+                { $set: { "routine.$[day].warmup" : warmup } }, { arrayFilters: [ { $or: [{"day._id": day_id}, {"day._id": new ObjectId(day_id)}] } ] })
              
         })
 }
@@ -249,6 +262,7 @@ export {
     getRoutineByUserId,
     createWeek,
     editWeek,
+    editWeekName,
     deleteWeek,
     createDay,
     deleteDay,

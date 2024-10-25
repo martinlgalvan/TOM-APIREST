@@ -1,5 +1,6 @@
 import express from 'express'
 import * as RoutineController from '../controllers/routine.api.controllers.js'
+
 import * as usersController from '../controllers/users.api.controllers.js'
 import * as ListExercisesController from '../controllers/listExercises.api.controllers.js'
 import {isLogin, isAdmin} from '../middleware/auth.middleware.js'
@@ -8,7 +9,7 @@ const router = express.Router()
 
 // Semana
 router.route('/api/week/:week_id')
-    .get([isLogin, isAdmin],RoutineController.findByWeekId)
+    .get(RoutineController.findByWeekId)
     .patch([isLogin, isAdmin],RoutineController.editWeek)
     .delete([isLogin, isAdmin],RoutineController.deleteWeek)
 
@@ -24,20 +25,21 @@ router.route('/api/user/:userId/routine/clon')
     .post([isLogin],RoutineController.createClonLastWeek)
 
     router.route('/api/user/:user_id/routine/par/week')
-    .post(RoutineController.createPARweekInRoutine)
+    .post([isLogin, isAdmin],RoutineController.createPARweekInRoutine)
 
 
 router.route('/api/user/:user_id/routine/par')
-    .get(RoutineController.getPAR)
-    .post(RoutineController.createPARweek)
+    .get([isLogin, isAdmin],RoutineController.getPAR)
+    .post([isLogin, isAdmin],RoutineController.createPARweek)
 
 router.route('/api/par/:id_par')
-    .delete(RoutineController.deletePAR)
+    .delete([isLogin, isAdmin],RoutineController.deletePAR)
 
 // Días 
 
 router.route('/api/week/:week_id/day')
     .post([isLogin, isAdmin],RoutineController.createDay)
+    .patch([isLogin, isAdmin],RoutineController.editWeekName)
 
 //  Día y creación de un ejercicio
 router.route('/api/week/:week_id/day/:day_id')

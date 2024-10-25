@@ -20,7 +20,6 @@ function findAll(req, res){
 
 
 
-
 function findByWeekId(req, res){
     const week_id = req.params.week_id
 
@@ -34,6 +33,7 @@ function findByWeekId(req, res){
         })
        
 }
+
 
 function findRoutineByUserId(req, res){
     const id = req.params.userId
@@ -125,7 +125,34 @@ function createClonLastWeek(req, res){
 }
 
 
-function editWeek(req, res){
+function editWeek(req, res) {
+    const weekID = req.params.week_id;
+
+    // Verificar si el cuerpo de la solicitud contiene un array
+    if (!Array.isArray(req.body)) {
+        return res.status(400).json({ message: "Expected an array of objects." });
+    }
+
+    const newRoutine = req.body; // Recibe directamente el array de objetos
+
+    RoutineServices.editWeek(weekID, newRoutine)
+        .then(function () {
+            return RoutineServices.getRoutineById(weekID);
+        })
+        .then(function (weekData) {
+            if (weekData) {
+                res.status(200).json({ weekData });
+            } else {
+                res.status(404).json({ message: "Week not found." });
+            }
+        })
+        .catch(function (error) {
+            res.status(500).json({ message: "Error updating the week.", error });
+        });
+}
+
+function editWeekName(req, res){
+    console.log(req.body)
     const weekID = req.params.week_id
 
     const newWeek = {}
@@ -134,7 +161,7 @@ function editWeek(req, res){
         newWeek.name = req.body.name
     } 
 
-    RoutineServices.editWeek(weekID, newWeek)
+    RoutineServices.editWeekName(weekID, newWeek)
         .then(function(){
             return RoutineServices.getRoutineById(weekID)
         })
@@ -147,6 +174,7 @@ function editWeek(req, res){
         })
 
 }
+
 
 function deleteWeek(req, res) {
     const week_id = req.params.week_id
@@ -660,6 +688,7 @@ export {
     findByWeekId,
     deleteWeek,
     editWeek,
+    editWeekName,
     findRoutineByUserId,
 
     createDay,
@@ -690,5 +719,6 @@ export {
     getPAR,
     deletePAR,
     createPARweek,
-    createPARweekInRoutine
+    createPARweekInRoutine,
+
 }
