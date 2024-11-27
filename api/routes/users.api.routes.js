@@ -55,10 +55,10 @@ router.route('/api/column/:columnId/exercise/:idExercise')
     .delete([isLogin, isAdmin],ColumnController.deleteExerciseInColumnById)
 
     // Ruta para generar un QR para un usuario específico
-router.get('/generate-qr/:userId', ColumnController.generateUserQR);
+router.get('/api/generate-qr/:userId', ColumnController.generateUserQR);
 
 // Ruta para iniciar sesión usando el QR
-router.post('/qr-login', ColumnController.loginWithQR);
+router.post('/api/qr-login', ColumnController.loginWithQR);
 
 
 export default router
