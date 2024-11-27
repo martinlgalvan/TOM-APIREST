@@ -1,8 +1,12 @@
 import { MongoClient, ObjectId } from 'mongodb'
-import {getDate} from './../date/formatedDate.js'
-import bcrypt from 'bcrypt'
+import dotenv from 'dotenv';
 
-const client = new MongoClient('mongodb://m4rt1n:s0yM4RT1NG4LV4N@62.72.51.41:27017/')
+// Carga las variables de entorno desde el archivo .env
+dotenv.config();
+import {getDate} from './../date/formatedDate.js'
+import bcrypt from 'bcryptjs';
+
+const client = new MongoClient(process.env.MONGODB_URI)
 const db = client.db('TOM')
 const users = db.collection('Users')
 const userProfile = db.collection('usersProfile')

@@ -54,5 +54,11 @@ router.route('/api/column/:columnId/exercise/:idExercise')
     .patch([isLogin, isAdmin],ColumnController.editExerciseInColumn)
     .delete([isLogin, isAdmin],ColumnController.deleteExerciseInColumnById)
 
+    // Ruta para generar un QR para un usuario específico
+router.get('/generate-qr/:userId', ColumnController.generateUserQR);
+
+// Ruta para iniciar sesión usando el QR
+router.post('/qr-login', ColumnController.loginWithQR);
+
 
 export default router

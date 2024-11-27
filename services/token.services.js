@@ -1,8 +1,12 @@
 import { MongoClient, ObjectId } from 'mongodb'
+import dotenv from 'dotenv';
+
+// Carga las variables de entorno desde el archivo .env
+dotenv.config();
 
 const options = { keepAlive: true };
 
-const client = new MongoClient('mongodb://m4rt1n:s0yM4RT1NG4LV4N@62.72.51.41:27017/',options)
+const client = new MongoClient(process.env.MONGODB_URI,options)
 const db = client.db('TOM')
 const tokens = db.collection('Tokens')
 

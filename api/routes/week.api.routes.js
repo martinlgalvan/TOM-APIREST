@@ -33,6 +33,7 @@ router.route('/api/user/:user_id/routine/par')
     .post([isLogin, isAdmin],RoutineController.createPARweek)
 
 router.route('/api/par/:id_par')
+    .put(RoutineController.updatePAR)
     .delete([isLogin, isAdmin],RoutineController.deletePAR)
 
 // Días 

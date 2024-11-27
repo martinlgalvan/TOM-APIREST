@@ -1,8 +1,12 @@
 import { MongoClient, ObjectId } from 'mongodb'
+import dotenv from 'dotenv';
+
+// Carga las variables de entorno desde el archivo .env
+dotenv.config();
 
 const options = { keepAlive: true };
 
-const client = new MongoClient('mongodb://m4rt1n:s0yM4RT1NG4LV4N@62.72.51.41:27017/',options)
+const client = new MongoClient(process.env.MONGODB_URI,options)
 const db = client.db('TOM')
 const par = db.collection('PAR')
 
@@ -14,6 +18,7 @@ async function getPAR(id){
             return par.find({  $or: [{user_id: id}, {user_id: new ObjectId(id)}]}).toArray()
         }) 
 }
+
 
 
 async function createPAR(PAR,user_id){
@@ -30,6 +35,28 @@ async function createPAR(PAR,user_id){
         .then(function (){
             return newPAR
         })
+}
+
+async function updatePAR(id, updatedPAR) {
+    const filter = { _id: new ObjectId(id) };
+
+    // Copia el objeto y elimina el campo `_id` si existe
+    const { _id, ...updatedFields } = updatedPAR;
+
+    const update = { $set: updatedFields };
+
+    try {
+        await client.connect();
+        const result = await par.updateOne(filter, update);
+
+        if (result.matchedCount === 0) {
+            throw new Error('El PAR no fue encontrado.');
+        }
+
+        return { message: 'PAR actualizado exitosamente' };
+    } catch (err) {
+        throw new Error(`Error al actualizar el PAR: ${err.message}`);
+    }
 }
 
 
@@ -56,6 +83,7 @@ async function deletePAR(id) {
 export {
     getPAR,
     createPAR,
+    updatePAR,
     deletePAR
 
 }

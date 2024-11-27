@@ -1,7 +1,13 @@
 import { ObjectId } from 'mongodb'
+import dotenv from 'dotenv';
+dotenv.config();
+import jwt from 'jsonwebtoken';
+import QRCode from 'qrcode';
+import * as UsersService from '../../services/users.services.js';
 import * as RoutineServices from '../../services/routine.services.js'
 import * as ColumnService from '../../services/randomizerColumns.services.js'
 import * as PARservices from '../../services/PAR.services.js'
+
 
 function findAll(req, res){
 
@@ -604,6 +610,19 @@ function getPAR(req, res){
        
 }
 
+function updatePAR(req, res) {
+    const id_par = req.params.id_par;
+    const updatedPAR = req.body; // Se espera que el cuerpo contenga los datos a actualizar
+
+    PARservices.updatePAR(id_par, updatedPAR)
+        .then((result) => {
+            res.status(200).json(result);
+        })
+        .catch((err) => {
+            res.status(500).json({ error: err.message });
+        });
+}
+
 function deletePAR(req, res) {
     const id_par = req.params.id_par;
 
@@ -679,6 +698,54 @@ function createPARweekInRoutine(req, res){
 } // AñADOR ESTP
 
 
+async function generateUserQR(req, res) {
+    const { userId } = req.params; // ID del usuario al que se generará el QR
+
+    try {
+        // Verifica si el usuario existe
+        const user = await UsersService.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "Usuario no encontrado." });
+        }
+
+        // Genera un token único para el usuario
+        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET); // Expira en 10 minutos
+
+        // Crea la URL del QR
+        const qrData = `https://planificaciontom/qr-login?token=${token}`;
+
+        // Genera la imagen del QR
+        const qrImage = await QRCode.toDataURL(qrData);
+
+        res.status(200).json({ qrImage, token });
+    } catch (error) {
+        res.status(500).json({ message: "Error al generar el QR.", error: error.message });
+    }
+}
+
+// Inicia sesión usando un token del QR
+async function loginWithQR(req, res) {
+    const { token } = req.body;
+
+    try {
+        // Valida el token del QR
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const userId = decoded.id;
+
+        // Busca al usuario correspondiente
+        const user = await UsersService.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "Usuario no encontrado." });
+        }
+
+        // Genera un nuevo token de sesión
+        const sessionToken = jwt.sign({ id: user._id, role: user.role }, process.env.SESSION_SECRET);
+
+        res.status(200).json({ jwt: sessionToken, user });
+    } catch (error) {
+        res.status(400).json({ message: "Token inválido o expirado.", error: error.message });
+    }
+}
 
 
 export {
@@ -717,8 +784,12 @@ export {
     deleteExerciseInColumnById,
 
     getPAR,
+    updatePAR,
     deletePAR,
     createPARweek,
     createPARweekInRoutine,
+
+    generateUserQR,
+    loginWithQR
 
 }

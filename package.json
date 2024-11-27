@@ -10,12 +10,14 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^4.17.2",
-    "node": "^18.20.4",
+    "pnpm": "^9.14.2",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "update": "^0.4.2",
     "yup": "^0.32.11"
