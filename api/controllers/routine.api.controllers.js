@@ -712,7 +712,7 @@ async function generateUserQR(req, res) {
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET); // Expira en 10 minutos
 
         // Crea la URL del QR
-        const qrData = `https://planificaciontom/qr-login?token=${token}`;
+        const qrData = `https://planificaciontom.com/qr-login?token=${token}`;
 
         // Genera la imagen del QR
         const qrImage = await QRCode.toDataURL(qrData);
