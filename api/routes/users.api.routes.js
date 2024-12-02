@@ -6,6 +6,8 @@ import * as CellController from '../controllers/routine.api.controllers.js'
 
 import {isLogin, isAdmin} from '../middleware/auth.middleware.js'
 import {ValidateLogin, ValidateRegister} from '../middleware/validar.middleware.js'
+import checkPlanLimit from '../middleware/checkPlanLimit.middleware.js'
+import isPlanPaid from '../middleware/isPlanPaid.middleware.js'
 
 const router = express.Router()
 
@@ -20,15 +22,15 @@ router.route('/api/users/logout')
 
 //Para encontrar usuarios según el id del entrenador, y crearlos
 router.route('/api/users/:idEntrenador')
-    .get([isLogin, isAdmin],usersController.getUsersByEntrenador)
-    .post([isLogin, isAdmin],usersController.create)
+    .get([isLogin, isAdmin, isPlanPaid],usersController.getUsersByEntrenador)
+    .post([isLogin, isAdmin, checkPlanLimit, isPlanPaid],usersController.create)
 
 
 //Para encontrar y/o eliminar un usuario
 router.route('/api/user/:userId')
-    .get([isLogin, isAdmin],usersController.getUserById)
-    .delete([isLogin, isAdmin],usersController.removeUser)
-    .patch([isLogin, isAdmin],usersController.addUserProperty)
+    .get([isLogin, isAdmin, isPlanPaid],usersController.getUserById)
+    .delete([isLogin, isAdmin, isPlanPaid],usersController.removeUser)
+    .patch([isLogin, isAdmin, isPlanPaid],usersController.addUserProperty)
 
 //Base de datos de ejercicios
 router.route('/api/exercises/:idEntrenador')
