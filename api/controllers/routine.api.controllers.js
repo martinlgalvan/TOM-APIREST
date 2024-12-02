@@ -5,7 +5,6 @@ import jwt from 'jsonwebtoken';
 import QRCode from 'qrcode';
 import * as UsersService from '../../services/users.services.js';
 import * as RoutineServices from '../../services/routine.services.js'
-import * as ColumnService from '../../services/randomizerColumns.services.js'
 import * as PARservices from '../../services/PAR.services.js'
 
 
@@ -471,128 +470,6 @@ async function deletewarmUp(req, res){
 }
 
 
-//******************* COLUMNS */
-
-// Controlador para obtener todas las columnas
-function getAllColumns(req, res) {
-
-    const user_id = req.params.user_id;
-
-    ColumnService.getAllColumns(user_id)
-        .then((columns) => {
-            res.status(200).json(columns);
-        })
-        .catch((err) => {
-            res.status(500).json({ error: err.message });
-        });
-}
-
-
-// Controlador para la creación de una columna
-function createColumn(req, res) {
-
-    const user_id = req.params.user_id;
-    const columnName = req.body.name;
-
-    ColumnService.createColumn(columnName,user_id)
-        .then((newColumn) => {
-            res.status(201).json(newColumn);
-        })
-        .catch((err) => {
-            res.status(500).json({ error: err.message });
-        });
-}
-
-// Controlador para editar una columna por su ID
-function editColumn(req, res) {
-    const columnId = req.params.columnId;
-    const updatedData = {}
-
-    if(req.body.name){
-        updatedData.name = req.body.name
-    } 
-
-
-
-    ColumnService.updateColumn(columnId, updatedData)
-        .then((result) => {
-            res.status(200).json(result);
-        })
-        .catch((err) => {
-            res.status(500).json({ error: err.message });
-        });
-}
-
-// Controlador para eliminar una columna por su ID
-function deleteColumn(req, res) {
-    const columnId = req.params.columnId;
-
-    ColumnService.deleteColumn(columnId)
-        .then((result) => {
-            res.status(200).json(result);
-        })
-        .catch((err) => {
-            res.status(500).json({ error: err.message });
-        });
-}
-
-// Controlador para agregar objetos  a la  columna
-
-function addExerciseToColumn(req, res) {
-    const columnId = req.params.columnId;
-    const exercise = {
-        name: req.body.name,
-        video: req.body.video,
-        _id: new ObjectId()
-}
-    ColumnService.addObjectToColumn(columnId, exercise)
-        .then((result) => {
-            res.status(200).json(result);
-        })
-        .catch((err) => {
-            res.status(500).json({ error: err.message });
-        });
-}
-
-// Controlador para editar los ejercicios dentro de la  columna
-
-function editExerciseInColumn(req, res) {
-    const columnId = req.params.columnId;
-    const idExercise = req.params.idExercise;
-    const exercise = {}
-
-    if(req.body.name){
-        exercise.name = req.body.name
-    } 
-
-    if(req.body.video){
-        exercise.video = req.body.video
-    } 
-
-    console.log(columnId,idExercise,exercise)
-
-    ColumnService.editExerciseInColumn(columnId, idExercise, exercise)
-        .then((result) => {
-            res.status(200).json(result);
-        })
-        .catch((err) => {
-            res.status(500).json({ error: err.message });
-        });
-
-}
-
-function deleteExerciseInColumnById(req, res) {
-    const columnId = req.params.columnId;
-    const idExercise = req.params.idExercise;
-
-    ColumnService.deleteExerciseInColumnById(columnId, idExercise)
-        .then((result) => {
-            res.status(200).json(result);
-        })
-        .catch((err) => {
-            res.status(500).json({ error: err.message });
-        });
-}
 
 
 
@@ -773,15 +650,6 @@ export {
     createWarmUp,
     editWarmUp,
     deletewarmUp,
-
-    getAllColumns,
-    createColumn,
-    editColumn,
-    deleteColumn,
-
-    addExerciseToColumn,
-    editExerciseInColumn,
-    deleteExerciseInColumnById,
 
     getPAR,
     updatePAR,

@@ -2,7 +2,6 @@ import express from 'express'
 import * as RoutineController from '../controllers/routine.api.controllers.js'
 
 import * as usersController from '../controllers/users.api.controllers.js'
-import * as ListExercisesController from '../controllers/listExercises.api.controllers.js'
 import {isLogin, isAdmin} from '../middleware/auth.middleware.js'
 
 const router = express.Router()
@@ -48,16 +47,5 @@ router.route('/api/week/:week_id/day/:day_id')
     .post([isLogin,isAdmin],RoutineController.createExercise)
     .delete([isLogin, isAdmin],RoutineController.deleteDay)
     
-
-
-// Lista de ejercicios
-//Editar un ejercicio
-
-router.route('/api/listExercises')
-    .get([isLogin],ListExercisesController.findExercises)
-
-
-router.route('/api/listExercises/newExercise')
-    .post([isLogin, isAdmin],ListExercisesController.createExercise)
 
 export default router
