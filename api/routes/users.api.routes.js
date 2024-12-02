@@ -42,19 +42,6 @@ router.route('/api/exercises/:exercise_id')
     .delete([isLogin, isAdmin],ListExercises.deleteExercise)
     .patch([isLogin, isAdmin],ListExercises.editExercise)
 
-//Columns
-    router.route('/api/:user_id/columns')
-    .get([isLogin, isAdmin],ColumnController.getAllColumns)
-    .post([isLogin, isAdmin],ColumnController.createColumn)
-  
-  router.route('/api/column/:columnId')
-    .post([isLogin, isAdmin],ColumnController.addExerciseToColumn)
-    .patch([isLogin, isAdmin],ColumnController.editColumn)
-    .delete([isLogin, isAdmin],ColumnController.deleteColumn)
-
-router.route('/api/column/:columnId/exercise/:idExercise')
-    .patch([isLogin, isAdmin],ColumnController.editExerciseInColumn)
-    .delete([isLogin, isAdmin],ColumnController.deleteExerciseInColumnById)
 
     // Ruta para generar un QR para un usuario específico
 router.get('/api/generate-qr/:userId', ColumnController.generateUserQR);
