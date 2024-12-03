@@ -1,13 +1,13 @@
 import * as userService from '../../services/users.services.js';
 
 const plans = {
-  Gratuito: { maxUsers: 5, costPerUser: 0 },
-  Basico: { maxUsers: 18, costPerUser: 1000 },
-  Essential: { maxUsers: 30, costPerUser: 833 },
-  Pro: { maxUsers: 50, costPerUser: 600 },
-  Elite: { maxUsers: 85, costPerUser: 423 },
-  Empresarial: { maxUsers: 120, costPerUser: 354 },
-  Personalizado: { maxUsers: Infinity, costPerUser: 0 }, // Sin límite
+  Gratuito: { maxUsers: 5},
+  Basico: { maxUsers: 20},
+  Essential: { maxUsers: 30},
+  Profesional: { maxUsers: 55},
+  Elite: { maxUsers: 95},
+  Empresarial: { maxUsers: 140},
+  Personalizado: { maxUsers: 500}, // Sin límite
 };
 
 async function checkPlanLimit(req, res, next) {
