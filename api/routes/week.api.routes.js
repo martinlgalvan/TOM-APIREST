@@ -8,7 +8,7 @@ const router = express.Router()
 
 // Semana
 router.route('/api/week/:week_id')
-    .get(RoutineController.findByWeekId)
+    .get([isLogin], RoutineController.findByWeekId)
     .patch([isLogin, isAdmin],RoutineController.editWeek)
     .delete([isLogin, isAdmin],RoutineController.deleteWeek)
 

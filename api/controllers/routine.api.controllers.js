@@ -82,7 +82,8 @@ function createClonLastWeek(req, res){
     //Armo lo que quiero guardar
     
     const user_id = req.params.userId
-
+    const fecha = req.body.fecha
+    console.log(req.body.fecha)
     const week = {
         name: req.body.name,
         routine: [{}]
@@ -100,7 +101,12 @@ function createClonLastWeek(req, res){
                     //let ultimoIndex = data.length - 1
                     let ultimoArr = data[0]
                     ultimoArr._id = new ObjectId()
-                    ultimoArr.name = `Semana ${data.length + 1}`
+                    if(fecha == "isDate"){
+                        ultimoArr.name = `Semana del ${new Date().toLocaleDateString()}` ;
+                    } else{
+                        ultimoArr.name = `Semana ${data.length + 1}`
+                    }
+                 
             
                     for (let i = 0; i < ultimoArr.routine.length; i++) {
 

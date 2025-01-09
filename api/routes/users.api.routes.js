@@ -27,7 +27,7 @@ router.route('/api/users/:idEntrenador')
 
 //Para encontrar y/o eliminar un usuario
 router.route('/api/user/:userId')
-    .get([isLogin, isAdmin, isPlanPaid],usersController.getUserById)
+    .get([isLogin],usersController.getUserById)
     .delete([isLogin, isAdmin, isPlanPaid],usersController.removeUser)
     .patch([isLogin, isAdmin, isPlanPaid],usersController.addUserProperty)
 
