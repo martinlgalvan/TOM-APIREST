@@ -35,6 +35,9 @@ router.route('/api/par/:id_par')
     .put(RoutineController.updatePAR)
     .delete([isLogin, isAdmin],RoutineController.deletePAR)
 
+    router.route('/api/week/:week_id/day')
+    .post([isLogin, isAdmin],RoutineController.createDay)
+    .patch([isLogin, isAdmin],RoutineController.editWeekName)
 
 //  Día y creación de un ejercicio
 router.route('/api/week/:week_id/day/:day_id')
