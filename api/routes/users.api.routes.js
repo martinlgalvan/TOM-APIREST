@@ -2,6 +2,7 @@ import express from 'express'
 import * as usersController from '../controllers/users.api.controllers.js'
 import * as ColumnController from '../controllers/routine.api.controllers.js'
 
+import { saveSubscription} from './../../services/pushSubscription.services.js';
 
 import {isLogin, isAdmin} from '../middleware/auth.middleware.js'
 import {ValidateLogin, ValidateRegister} from '../middleware/validar.middleware.js'
@@ -31,7 +32,18 @@ router.route('/api/user/:userId')
     .delete([isLogin, isAdmin, isPlanPaid],usersController.removeUser)
     .patch([isLogin, isAdmin, isPlanPaid],usersController.addUserProperty)
 
-
+router.post('/api/save-subscription', async (req, res) => {
+    try {
+            const { subscription, userId } = req.body;
+            if (!subscription) {
+                return res.status(400).json({ message: 'Falta el objeto de suscripción.' });
+            }
+            const result = await saveSubscription(subscription, userId);
+            res.status(201).json({ message: 'Suscripción guardada correctamente.', data: result });
+        } catch (err) {
+            res.status(500).json({ message: 'Error al guardar la suscripción.' });
+        }
+    });
 
     // Ruta para generar un QR para un usuario específico
 router.get('/api/generate-qr/:userId', ColumnController.generateUserQR);
