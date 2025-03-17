@@ -22,32 +22,5 @@ router.post('/api/save-subscription', async (req, res) => {
     }
 });
 
-/**
- * Endpoint para obtener las suscripciones de un usuario.
- */
-router.get('/api/subscriptions/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const subscriptions = await getSubscriptionsByUser(userId);
-    res.json({ data: subscriptions });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Error al obtener las suscripciones.' });
-  }
-});
-
-/**
- * Endpoint para eliminar una suscripción.
- */
-router.delete('/api/subscription/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const result = await deleteSubscription(id);
-    res.json(result);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Error al eliminar la suscripción.' });
-  }
-});
 
 export default router;

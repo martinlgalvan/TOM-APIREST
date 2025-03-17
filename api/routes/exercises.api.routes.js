@@ -10,25 +10,11 @@ const router = express.Router()
 router.route('/api/week/:week_id/day/:day_id/exercise')
     .put([isLogin], RoutineController.editById)
 
-router.route('/api/week/:week_id/day/:day_id/exercise/:exercise_id')
-    .delete([isLogin,isAdmin], RoutineController.deleteExercise)
-
 
 router.route('/api/week/:week_id/day/:day_id')
     .get([isLogin, isAdmin],RoutineController.findExercises)
 
 
-
-router.route('/api/week/:week_id/day/:day_id/exercises')
-    .post([isLogin,isAdmin],RoutineController.createExercise)
-
-router.route('/api/week/:week_id/day/:day_id/exercises/amrap')
-    .post([isLogin,isAdmin],RoutineController.createCircuit)
-
-
-router.route('/api/week/:week_id/day/:day_id/exercise/:exercise_id/amrap')
-    .put(RoutineController.editExerciseInCircuit)
-    //.delete([isLogin,isAdmin], RoutineController.deleteExercise)
 
 //Warmup part
 
