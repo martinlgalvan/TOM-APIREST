@@ -70,57 +70,46 @@ function find(req, res) {
             res.json(users)
         })
 }
+
+
 function getUsersByEntrenador(req, res) {
-    const filter = {};
     const entrenador_id = req.params.idEntrenador;
 
     UsersService.getUsersByEntrenadorId(entrenador_id)
         .then(function(users) {
             if (users) {
-                 const  userPromises =  users.map(user => {
-                    console.log(user)
-                    return RoutineServices.getRoutineByUserId(user._id)
-                        .then(function(routine) {
-                            console.log(routine)
-                            user.rutina = routine;
-                            return user;
-                        });
-                });
-
-                Promise.all(userPromises)
-                    .then(function(usersWithRoutines) {
-                        res.status(200).json(usersWithRoutines);
-                    })
-                    .catch(function(error) {
-                        res.status(500).json({ message: "Error al obtener las rutinas de los usuarios." });
-                    });
+                res.status(200).json(users); // solo usuarios, sin rutinas
             } else {
                 res.status(404).json({ message: "No es posible realizar esta acción." });
             }
+        })
+        .catch(function(error) {
+            res.status(500).json({ message: "Error al obtener los usuarios." });
         });
 }
 
 
 function create(req, res) {
-    const entrenador_id = req.params.idEntrenador
-    const logo = req.body.logo
-    const color = req.body.color
-    const textColor = req.body.textColor
+    const entrenador_id = req.params.idEntrenador;
+    const logo = req.body.logo;
+    const color = req.body.color;
+    const textColor = req.body.textColor;
     const user = {
         name: req.body.name,
         email: req.body.email,
         password: req.body.password,
         role: "common"
-    }
+    };
 
     UsersService.create(user, entrenador_id, logo, color, textColor)
         .then(user => {
-            console.log(user)
-            res.json(user)
+            console.log(user);
+            res.json(user);
         })
         .catch(err => {
-            res.status(500).json({ message: err.message })
-        })
+            // Si el error tiene status definido (ej. 400), se usará; de lo contrario, 500
+            res.status(err.status || 500).json({ message: err.message });
+        });
 }
 
 function removeUser(req, res) {
