@@ -13,19 +13,6 @@ router.route('/api/week/:week_id')
     .delete([isLogin, isAdmin],RoutineController.deleteWeek)
 
 
-//Para crear una semana de la rutina de un usuario
-router.route('/api/user/:userId/routine')
-    .get(RoutineController.findRoutineByUserId)
-    .post([isLogin, isAdmin],RoutineController.createWeek)
-    .patch(usersController.upsertUserDetails);
-
-router.route('/api/user/:userId/routine/clon')
-    .get(usersController.getProfileByUserId)
-    .post([isLogin],RoutineController.createClonLastWeek)
-
-router.route('/api/user/:user_id/routine/par/week')
-    .post([isLogin, isAdmin],RoutineController.createPARweekInRoutine)
-
 
 
 
