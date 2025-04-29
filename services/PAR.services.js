@@ -1,5 +1,6 @@
 import { MongoClient, ObjectId } from 'mongodb'
 import dotenv from 'dotenv';
+import {getDate} from './../date/formatedDate.js'
 
 // Carga las variables de entorno desde el archivo .env
 dotenv.config();
@@ -55,6 +56,7 @@ async function updatePAR(id, updatedPAR) {
 
         return { message: 'PAR actualizado exitosamente' };
     } catch (err) {
+        console.log(err.message)
         throw new Error(`Error al actualizar el PAR: ${err.message}`);
     }
 }
@@ -74,9 +76,56 @@ async function deletePAR(id) {
             return { message: 'PAR eliminada exitosamente' };
         })
         .catch((err) => {
+            
             throw new Error(`Error al eliminar el PAR: ${err.message}`);
         });
 }
+
+async function createProgressionFromPAR(parId) {
+    await client.connect();
+    const original = await par.findOne({ _id: new ObjectId(parId) });
+    if (!original) throw new Error('PAR no encontrado');
+
+    // Buscar cuántas progresiones ya existen para este PAR
+    const existingProgressionsCount = await par.countDocuments({ parent_par_id: new ObjectId(parId) });
+
+    const clone = JSON.parse(JSON.stringify(original));
+    clone._id = new ObjectId();
+    clone.parent_par_id = original._id;  // enlace al PAR original
+    clone.created_at = getDate();
+    clone.timestamp = new Date().getTime();
+
+    // Asignar nombre: nombre original + Progresión N
+    clone.name = `${original.name || "PAR"} - Progresión ${existingProgressionsCount + 1}`;
+
+    if (Array.isArray(clone.routine)) {
+        clone.routine.forEach((day, index) => {
+            day._id = new ObjectId();
+            // 🔥 Copiamos el mismo nombre del día original
+            day.name = original.routine[index]?.name || `Día ${index + 1}`;
+            
+            // También re-generamos IDs internos
+            if (Array.isArray(day.exercises)) {
+                day.exercises = day.exercises.map(ex => ({
+                    ...ex,
+                    exercise_id: new ObjectId(),
+                    name: typeof ex.name === 'object' ? { ...ex.name } : ex.name // copiamos nombre si es string o si es objeto
+                }));
+            }
+            if (Array.isArray(day.warmup)) {
+                day.warmup = day.warmup.map(wu => ({ ...wu, warmup_id: new ObjectId(), name: wu.name || '' }));
+            }
+            if (Array.isArray(day.mobility)) {
+                day.mobility = day.mobility.map(mob => ({ ...mob, mobility_id: new ObjectId(), name: mob.name || '' }));
+            }
+        });
+    }
+
+    await par.insertOne(clone);
+    return clone;
+}
+
+
 
 
 
@@ -84,7 +133,8 @@ export {
     getPAR,
     createPAR,
     updatePAR,
-    deletePAR
+    deletePAR,
+    createProgressionFromPAR
 
 }
 

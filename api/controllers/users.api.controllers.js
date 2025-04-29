@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
 import * as UsersService from '../../services/users.services.js'
+import * as BlockService from '../../services/block.services.js'
 import * as RoutineServices from '../../services/routine.services.js'
 import * as TokenService from '../../services/token.services.js'
 
@@ -74,43 +75,69 @@ function find(req, res) {
 
 function getUsersByEntrenador(req, res) {
     const entrenador_id = req.params.idEntrenador;
-
-    UsersService.getUsersByEntrenadorId(entrenador_id)
-        .then(function(users) {
-            if (users) {
-                res.status(200).json(users); // solo usuarios, sin rutinas
-            } else {
-                res.status(404).json({ message: "No es posible realizar esta acción." });
-            }
+  
+    // ✅ Si el query string incluye `blocks=true`, devolvemos bloques
+    if (req.query.blocks === 'true') {
+      return BlockService.findByUserId(entrenador_id)
+        .then(blocks => {
+          res.status(200).json(blocks);
         })
-        .catch(function(error) {
-            res.status(500).json({ message: "Error al obtener los usuarios." });
+        .catch(error => {
+          res.status(500).json({ message: "Error al obtener los bloques.", error: error.message });
         });
-}
+    }
+  
+    // 👥 Si no hay query especial, devolvemos los usuarios
+    UsersService.getUsersByEntrenadorId(entrenador_id)
+      .then(users => {
+        if (users) {
+          res.status(200).json(users);
+        } else {
+          res.status(404).json({ message: "No es posible realizar esta acción." });
+        }
+      })
+      .catch(error => {
+        res.status(500).json({ message: "Error al obtener los usuarios." });
+      });
+  }
 
 
 function create(req, res) {
     const entrenador_id = req.params.idEntrenador;
+  
+    // ⚠️ Detectar si el body es para crear un bloque
+    if (req.body.type === 'block') {
+      const blockData = req.body.data;
+      return BlockService.createBlock(entrenador_id, blockData)
+        .then(block => res.status(201).json(block))
+        .catch(err => res.status(400).json({ message: err.message }));
+    }
+  
+    // ⚠️ Detectar si el body es para clonar un bloque
+    if (req.body.type === 'clone_block') {
+      const blockId = req.body.blockId;
+      return BlockService.cloneBlock(blockId, entrenador_id)
+        .then(result => res.status(201).json(result))
+        .catch(err => res.status(400).json({ message: err.message }));
+    }
+  
+    // ✔️ Lógica original para crear usuario
     const logo = req.body.logo;
-    const color = req.body.color;
-    const textColor = req.body.textColor;
     const user = {
-        name: req.body.name,
-        email: req.body.email,
-        password: req.body.password,
-        role: "common"
+      name: req.body.name,
+      email: req.body.email,
+      password: req.body.password,
+      role: "common"
     };
-
-    UsersService.create(user, entrenador_id, logo, color, textColor)
-        .then(user => {
-            console.log(user);
-            res.json(user);
-        })
-        .catch(err => {
-            // Si el error tiene status definido (ej. 400), se usará; de lo contrario, 500
-            res.status(err.status || 500).json({ message: err.message });
-        });
-}
+  
+    UsersService.create(user, entrenador_id, logo)
+      .then(user => {
+        res.json(user);
+      })
+      .catch(err => {
+        res.status(err.status || 500).json({ message: err.message });
+      });
+  }
 
 function removeUser(req, res) {
     const id = req.params.userId
@@ -130,11 +157,11 @@ function removeUser(req, res) {
 
 async function addUserProperty(req, res) {
     const userId = req.params.userId;
-    const { color, textColor } = req.body;
+    const category = req.body.category;
 
     try {
-        const user = await UsersService.addUserProperty(userId, color,  textColor);
-        res.status(200).json({ message: `Propiedad '${color}' agregada correctamente al usuario`, user });
+        const user = await UsersService.addUserProperty(userId, category);
+        res.status(200).json({ message: `Propiedad '${category}' agregada correctamente al usuario`, user });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

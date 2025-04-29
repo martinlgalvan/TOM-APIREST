@@ -16,18 +16,4 @@ router.route('/api/week/:week_id/day/:day_id')
 
 
 
-//Warmup part
-
-router.route('/api/week/:week_id/day/:day_id/warmup')
-    .post([isLogin,isAdmin],RoutineController.createWarmUp)
-
-router.route('/api/week/:week_id/warmup/:warmup_id')
-    .get([isLogin, isAdmin],RoutineController.findWarmup)
-
-router.route('/api/week/:week_id/day/:day_id/warmup/')
-    .put(RoutineController.editWarmUp)
-
-router.route('/api/week/:week_id/day/:day_id/warmup/:warmup_id')
-    .delete([isLogin,isAdmin], RoutineController.deletewarmUp)
-
 export default router

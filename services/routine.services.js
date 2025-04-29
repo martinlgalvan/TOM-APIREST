@@ -62,27 +62,193 @@ async function deleteDay(week_id, day_id ){
     }    
 
 
-async function createWeek(week,user_id){
-    const timestamp = new Date().getTime(); 
+    async function createWeek(week, user_id, block_id = null) {
+        const timestamp = new Date().getTime()
+      
+        const newWeek = {
+          ...week,
+          user_id: new ObjectId(user_id),
+          created_at: getDate(),
+          timestamp,
+          block_id: block_id ? new ObjectId(block_id) : null
+        }
+      
+        await client.connect()
+        await routine.insertOne(newWeek)
+        return newWeek
+      }
+      
 
-    const newWeek = {
-        ...week,
-        user_id: new ObjectId(user_id),
-        created_at: getDate(),
-        timestamp: timestamp
-    }
-
+async function createPARforMultipleUsers(PAR, user_ids) {
+  console.log(PAR)
+    // Por ejemplo, usamos un timestamp y la fecha actual para asignar a cada documento
+    const timestamp = new Date().getTime();
+    const newPARs = user_ids.map((userId) => ({
+      ...PAR,
+      user_id: new ObjectId(userId), // Cada documento tendrá el user_id correspondiente
+      created_at: getDate(),         // Suponiendo que getDate() es una función que devuelve la fecha formateada
+      timestamp: timestamp
+    }));
+  
     return client.connect()
-        .then(function(){
-            return routine.insertOne(newWeek)
-        })
-        .then(function (){
-            return newWeek
-        })
-}
+      .then(() => {
+        // Insertamos múltiples documentos
+        console.log(newPars)
+        return routine.insertMany(newPARs);
+      })
+      .then((result) => {
+        // Puedes retornar el arreglo de nuevos documentos o el resultado de la operación
+        return newPARs;
+      })
+      .catch((err) => {
+        throw new Error(`Error al crear PAR para múltiples usuarios: ${err.message}`);
+      });
+  }
 
+  async function createProgressionForMultipleUsers(template, user_ids) {
+    const timestamp = Date.now();
+    await client.connect();
+    const newWeeks = [];
+  
+    for (const userId of user_ids) {
+      const routines = await getRoutineByUserId(userId);
+      const lastWeek = routines[0];
+      if (!lastWeek) continue;
+  
+      const clone = JSON.parse(JSON.stringify(lastWeek));
+      clone._id = new ObjectId();
+      clone.user_id = new ObjectId(userId);
+      clone.created_at = getDate();
+      clone.timestamp = timestamp;
+      clone.name = `Semana ${routines.length + 1}`; // <-- nombre automático
+  
+      clone.routine.forEach((day, dayIndex) => {
+        const templDay = Array.isArray(template.routine) ? template.routine[dayIndex] : null;
+  
+        if (templDay) {
+          // Día: solo nombre si el template lo tiene
+          if (templDay.name && templDay.name.trim() !== '') {
+            day.name = templDay.name;
+          }
+  
+          // === EXERCISES ===
+          if (Array.isArray(templDay.exercises) && Array.isArray(day.exercises)) {
+            day.exercises.forEach((ex, exIndex) => {
+              const templEx = templDay.exercises[exIndex];
+              if (!templEx) return;
+  
+              if (ex.circuit && Array.isArray(ex.circuit)) {
+                // 🔁 CIRCUITO
+                ex.circuit.forEach((c, cIndex) => {
+                  const templC = templEx.circuit?.[cIndex];
+                  if (templC) {
+                    mergeFields(c, templC, ['reps', 'peso', 'video']);
+                    // name del circuito NO se pisa
+                  }
+                });
+                mergeFields(ex, templEx, ['type', 'typeOfSets', 'notas', 'numberExercise']);
+              } else {
+                // 🔁 EJERCICIO SIMPLE
+                mergeFields(ex, templEx, [
+                  'type', 'sets', 'reps', 'peso', 'rest',
+                  'video', 'notas', 'numberExercise', 'valueExercise'
+                ]);
+                // Backoff: mantener el original
+                if (typeof ex.name === 'object' && Array.isArray(ex.name.backoff)) {
+                  // no se toca
+                } else if (typeof templEx.name === 'object') {
+                  // aseguramos estructura homogénea
+                  ex.name = typeof ex.name === 'string' ? { name: ex.name } : ex.name;
+                }
+              }
+            });
+          }
+  
+          // === WARMUP ===
+          if (Array.isArray(templDay.warmup) && Array.isArray(day.warmup)) {
+            day.warmup.forEach((wu, wuIndex) => {
+              const templWu = templDay.warmup[wuIndex];
+              if (templWu) {
+                mergeFields(wu, templWu, [
+                  'sets', 'reps', 'peso', 'video',
+                  'notas', 'numberWarmup', 'valueWarmup'
+                ]);
+                // name no se pisa
+              }
+            });
+          }
+  
+          // === MOVILITY ===
+          if (Array.isArray(templDay.movility) && Array.isArray(day.movility)) {
+            day.movility.forEach((mob, mobIndex) => {
+              const templMob = templDay.movility[mobIndex];
+              if (templMob) {
+                mergeFields(mob, templMob, [
+                  'sets', 'reps', 'peso', 'video',
+                  'notas', 'numberMobility', 'valueMobility'
+                ]);
+                // name no se pisa
+              }
+            });
+          }
+        }
+  
+        // === ID REGENERATION ===
+        day._id = new ObjectId();
+  
+        if (Array.isArray(day.exercises)) {
+          day.exercises = day.exercises.map(ex => ({
+            ...ex,
+            exercise_id: new ObjectId()
+          }));
+        }
+  
+        if (Array.isArray(day.warmup)) {
+          day.warmup = day.warmup.map(wu => ({
+            ...wu,
+            warmup_id: new ObjectId()
+          }));
+        }
+  
+        if (Array.isArray(day.movility)) {
+          day.movility = day.movility.map(mob => ({
+            ...mob,
+            movility_id: new ObjectId()
+          }));
+        }
+      });
+  
+      newWeeks.push(clone);
+    }
+  
+    await routine.insertMany(newWeeks);
+    return newWeeks;
+  }
+  
+  // 🔧 Función utilitaria para hacer merge condicional
+  function mergeFields(target, source, fields) {
+    fields.forEach(field => {
+      const val = source[field];
+      if (val !== undefined && val !== '' && !(Array.isArray(val) && val.length === 0)) {
+        target[field] = val;
+      }
+    });
+  }
+  
 
-
+   async function updateBlockOfWeek(weekId, blockData) {
+    await client.connect();
+    const result = await db.collection('Routine').updateOne(
+      { _id: new ObjectId(weekId) },
+      { $set: { block: blockData, updated_at: new Date() } }
+    );
+  
+    if (result.modifiedCount === 1) {
+      return result;
+    } else {
+      throw new Error('No se modificó la semana');
+    }
+  }
 
 async function deleteWeek(weekId){
     return client.connect()
@@ -133,19 +299,7 @@ async function findExercises(week_id,day_id){
         }) 
 }
 
-async function createExercise(week_id, day_id, exercise, id ){
 
-    const newExercise = {
-        ...exercise,
-        exercise_id: new ObjectId(id)
-    }
-
-    return client.connect()
-        .then(function (galeriaServ){
-            return routine.updateOne({ _id: new ObjectId(week_id), $or: [{"routine._id": day_id}, {"routine._id": new ObjectId(day_id)}] },
-            { $push: { "routine.$[element].exercises" : newExercise } }, { arrayFilters: [ { $or: [{"element._id": day_id}, {"element._id": new ObjectId(day_id)}] } ] })
-        })  
-}
 
 
 async function editExercise(week_id,day_id, exercise){
@@ -272,7 +426,6 @@ export {
     deleteDay,
     editDay,
 
-    createExercise,
     editExercise,
     editExerciseInAmrap,
     deleteExercise,
@@ -282,6 +435,10 @@ export {
     createWarmUp,
     editWarmUp,
     deleteWarmup,
+    createPARforMultipleUsers,
+    createProgressionForMultipleUsers,
+
+    updateBlockOfWeek,
     
     createPAR
 }

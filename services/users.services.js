@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 
 // Carga las variables de entorno desde el archivo .env
 dotenv.config();
-import {getDate} from './../date/formatedDate.js'
+import { getDate } from './../date/formatedDate.js'
 import bcrypt from 'bcryptjs';
 
 const client = new MongoClient(process.env.MONGODB_URI)
@@ -31,9 +31,7 @@ async function getUsersByEntrenadorId(entrenador_id) {
         .sort({ "created_at.fecha": -1, "created_at.hora": -1 })
         .toArray();
       });
-  }
-  
-
+}
 
 async function login(userLogin) {
     await client.connect()
@@ -51,9 +49,7 @@ async function login(userLogin) {
     }
 
     return user
-
 }
-
 
 async function find(filter) {
     await client.connect()
@@ -63,30 +59,29 @@ async function find(filter) {
     return usersCollection
 }
 
-async function create(user,entrenador_id,logo, color, textColor) {
+async function create(user, entrenador_id, logo) {
     const newUser = { 
         ...user,
         entrenador_id: new ObjectId(entrenador_id),
         logo: logo,
-        color: color,
-        textColor: textColor,
-        created_at: getDate()}
+        created_at: getDate()
+    };
 
-    await client.connect()
+    await client.connect();
 
-    const userExist = await users.findOne({ email: newUser.email })
+    const userExist = await users.findOne({ email: newUser.email });
 
     if (userExist) {
-        throw new Error('El email ya existe')
+        // Se crea un error con status 400 para que el front pueda manejarlo correctamente
+        const error = new Error('Ese email ya existe, por favor ingresa otro');
+        error.status = 400;
+        throw error;
     }
 
-    const salt = await bcrypt.genSalt(10)
-
-    newUser.password = await bcrypt.hash(newUser.password, salt)
-
-    await users.insertOne(newUser)
-
-    return newUser
+    const salt = await bcrypt.genSalt(10);
+    newUser.password = await bcrypt.hash(newUser.password, salt);
+    await users.insertOne(newUser);
+    return newUser;
 }
 
 async function remove(id) {
@@ -95,8 +90,7 @@ async function remove(id) {
     await users.deleteOne({ _id: ObjectId(id) })
 }
 
-
-async function addUserProperty(userId, color, textColor) {
+async function addUserProperty(userId, category) {
     try {
         const trainer = await findById(userId); // Obtener el entrenador
         
@@ -105,19 +99,19 @@ async function addUserProperty(userId, color, textColor) {
         }
         
         // Agregar las propiedades al entrenador
-        trainer.color = color;
-        trainer.textColor = textColor;
+        trainer.category = category;
+
         
         // Actualizar el entrenador con las nuevas propiedades
         await users.updateOne(
-            { _id: new ObjectId(userId) },
-            { $set: { color: color, textColor: textColor } }
+            { $or: [{"_id" : userId}, {"_id" : new ObjectId(userId)}] },
+            { $set: { category: category } }
         );
         
         // Actualizar a todos los alumnos del entrenador
         const updatedStudents = await users.updateMany(
-            { entrenador_id: new ObjectId(userId) }, // Filtrar alumnos por el ID del entrenador
-            { $set: { color: color, textColor: textColor } }
+            { entrenador_id: new ObjectId(userId) },
+            { $set: { category: category} }
         );
         
         // Devolver el entrenador actualizado
@@ -125,8 +119,8 @@ async function addUserProperty(userId, color, textColor) {
     } catch (error) {
         throw new Error(`Error al agregar la propiedad al usuario: ${error.message}`);
     }
-    
 }
+
 async function upsertUserDetails(userId, details) {
     const timestamp = new Date().getTime(); 
     const newDetails = { 
@@ -135,14 +129,11 @@ async function upsertUserDetails(userId, details) {
         timestamp: timestamp
     }
     try {
-        // Buscar y actualizar los detalles del usuario, o crear uno nuevo si no existe
         const userDetails = await userProfile.findOneAndUpdate(
-            { user_id: new ObjectId(userId)},
+            { $or: [{"user_id" : userId}, {"user_id" : new ObjectId(userId)}]  },
             { $set: newDetails },
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
-
-        // Devolver los detalles del usuario actualizados o creados
         return userDetails;
     } catch (error) {
         throw new Error(`Error al actualizar o crear los detalles del usuario: ${error.message}`);
@@ -152,7 +143,7 @@ async function upsertUserDetails(userId, details) {
 async function findProfileByID(id) {
     try {
         await client.connect();
-        const user = await userProfile.findOne({ user_id: ObjectId(id) });
+        const user = await userProfile.findOne({$or: [{"user_id" : id}, {"user_id" : new ObjectId(id)}]});
         return user;
     } catch (error) {
         throw new Error(`Error al buscar el usuario: ${error.message}`);
@@ -169,6 +160,4 @@ export {
     addUserProperty,
     findProfileByID,
     upsertUserDetails
-
 }
-

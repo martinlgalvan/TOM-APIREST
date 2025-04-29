@@ -83,7 +83,6 @@ function createClonLastWeek(req, res){
     
     const user_id = req.params.userId
     const fecha = req.body.fecha
-    console.log(req.body.fecha)
     const week = {
         name: req.body.name,
         routine: [{}]
@@ -136,31 +135,44 @@ function createClonLastWeek(req, res){
 }
 
 
-function editWeek(req, res) {
+async function editWeek(req, res) {
     const weekID = req.params.week_id;
-
-    // Verificar si el cuerpo de la solicitud contiene un array
-    if (!Array.isArray(req.body)) {
-        return res.status(400).json({ message: "Expected an array of objects." });
+    const payload = req.body;
+  
+    try {
+      // ✅ CASO 1: Actualización tradicional (array = rutina semanal)
+      if (Array.isArray(payload)) {
+        await RoutineServices.editWeek(weekID, payload);
+        const updated = await RoutineServices.getRoutineById(weekID);
+        if (!updated) return res.status(404).json({ message: "Week not found." });
+        return res.status(200).json({ weekData: updated });
+      }
+  
+      // ✅ CASO 2: Actualizar bloque de UNA semana
+      if (payload.week_id && payload.block) {
+        await RoutineServices.updateBlockOfWeek(payload.week_id, payload.block);
+        return res.status(200).json({ message: 'Bloque actualizado' });
+      }
+  
+      // ✅ CASO 3: Actualizar bloques de VARIAS semanas
+      if (Array.isArray(payload.blocks)) {
+        const updates = await Promise.all(
+          payload.blocks.map(entry => {
+            if (!entry.week_id || !entry.block) return null;
+            return RoutineServices.updateBlockOfWeek(entry.week_id, entry.block);
+          })
+        );
+        return res.status(200).json({ message: 'Bloques múltiples actualizados', modified: updates.length });
+      }
+  
+      // ❌ Payload inválido
+      return res.status(400).json({ message: "Formato de actualización no válido." });
+  
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Error al actualizar semana(s).", error: error.message });
     }
-
-    const newRoutine = req.body; // Recibe directamente el array de objetos
-
-    RoutineServices.editWeek(weekID, newRoutine)
-        .then(function () {
-            return RoutineServices.getRoutineById(weekID);
-        })
-        .then(function (weekData) {
-            if (weekData) {
-                res.status(200).json({ weekData });
-            } else {
-                res.status(404).json({ message: "Week not found." });
-            }
-        })
-        .catch(function (error) {
-            res.status(500).json({ message: "Error updating the week.", error });
-        });
-}
+  }
 
 function editWeekName(req, res){
     console.log(req.body)
@@ -265,39 +277,6 @@ async function findExercises(req, res){
 }
 
 
-
-async function createExercise(req, res){
-    const week_id = req.params.week_id
-    const day_id = req.params.day_id
-
-    // CORREGIR ESTO PARA AUMENTAR VELOCIDAD EN LAS CONSULTAS
-    RoutineServices.getRoutineById(week_id)
-        .then(data => {
-                let days = data[0].routine
-                let indexDay = days.findIndex(dia => dia._id == day_id)
-                let ultimoIndex = days[indexDay].exercises.length + 1
-                
-                const exercise = {
-                    type: 'exercise',
-                    name: req.body.name,
-                    sets: req.body.sets,
-                    reps: req.body.reps,
-                    rest: req.body.rest,
-                    peso: req.body.peso,
-                    video: req.body.video,
-                    notas: req.body.notas,
-                    numberExercise: ultimoIndex,
-                    valueExercise: ultimoIndex
-                }
-                
-                RoutineServices.createExercise(week_id,day_id, exercise)
-                    .then(data => {
-                        res.status(201).json(data)
-                    })
-                
-        })
-
-}
 
 async function createCircuit(req, res){
     const week_id = req.params.week_id
@@ -550,35 +529,105 @@ function createPARweekInRoutine(req, res){
 
     //Armo lo que quiero guardar
     RoutineServices.getRoutineByUserId(user_id) 
-                .then((data) =>{
-                    
-                    const nameParWeek = `Semana ${data.length + 1}`
+        .then((data) =>{
+            const nameParWeek = `Semana ${data.length + 1}`
+            const week = {
+                name: nameParWeek,
+                routine: [{}],
+                block: req.body.block
+                // imitar el proceso antes de meterlo 
+            }
+            console.log(req.body.block)
 
-                    const week = {
-                        name: nameParWeek,
-                        routine: [{}]
-                        // imitar el proceso antes de meterlo 
-                    }
-
-                    
             if(req.body.routine){
                 week.routine = req.body.routine
             } 
-
-
-            
             RoutineServices.createWeek(week,user_id)
                 .then((data) => {
                     res.status(201).json(data)
                 })
             })
 
+} 
 
 
+function createWeekForMany(req, res) {
+    // Se espera que en el body envíen:
+    // { name: <nombre del PAR>, routine: <rutina opcional>, user_ids: [ 'id1', 'id2', ... ] }
+    const userIds = req.body.user_ids; 
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ message: "Debe enviar un arreglo de user_ids." });
+    }
+    
+    const week = {
+      name: req.body.name,
+      routine: req.body.routine || [{}]  // Asignamos un arreglo default si no hay rutina
+    };
+  
+    RoutineServices.createWeekForMany(week, userIds)
+      .then((data) => {
+        res.status(201).json(data);
+      })
+      .catch((err) => {
+        res.status(500).json({ error: err.message });
+      });
+  }
 
 
+  function createPARforMultipleUsersController(req, res) {
+    // Se espera que en el cuerpo de la solicitud se incluya:
+    // - Los datos de la rutina, p.ej., name, routine, etc.
+    // - Un arreglo llamado "user_ids" con los IDs (como string) de los usuarios a los que se asignará
+    
+    const user_ids = req.body.user_ids;
+    // Extraemos el resto de la información de la rutina.
+    // Puedes validar que user_ids es un arreglo y que tiene al menos un elemento.
+    if (!Array.isArray(user_ids) || user_ids.length === 0) {
+      return res.status(400).json({ message: "Debes enviar al menos un user_id en el arreglo 'user_ids'" });
+    }
+  
+    // Con la información del PAR enviada en el body, construimos el objeto (week)
+    const week = {
+      name: req.body.name,
+      routine: req.body.routine || [{}]
+      // Puedes agregar otros campos que necesites incluir en el PAR.
+    };
+  
+    RoutineServices.createPARforMultipleUsers(week, user_ids)
+      .then((data) => {
+        res.status(201).json(data);
+      })
+      .catch((err) => {
+        res.status(500).json({ error: err.message });
+      });
+  }
 
-} // AñADOR ESTP
+  async function createProgressionForMultipleUsersController(req, res) {
+    const { template, user_ids } = req.body;
+    if (!Array.isArray(user_ids) || user_ids.length === 0) {
+      return res.status(400).json({ message: 'Debes enviar un arreglo de user_ids.' });
+    }
+    
+    try {
+      const newWeeks = await RoutineServices.createProgressionForMultipleUsers(template, user_ids);
+      res.status(201).json(newWeeks);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  
+  async function createProgressionFromPARController(req, res) {
+    const parId = req.params.par_id;
+
+  
+    try {
+      const newPAR = await PARservices.createProgressionFromPAR(parId);
+      res.status(201).json(newPAR);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  }
 
 
 async function generateUserQR(req, res) {
@@ -646,7 +695,6 @@ export {
     editDay,
 
     findExercises,
-    createExercise,
     createCircuit,
     editExerciseInCircuit,
     editById,
@@ -662,6 +710,10 @@ export {
     deletePAR,
     createPARweek,
     createPARweekInRoutine,
+    createWeekForMany,
+    createPARforMultipleUsersController,
+    createProgressionForMultipleUsersController,
+    createProgressionFromPARController,
 
     generateUserQR,
     loginWithQR

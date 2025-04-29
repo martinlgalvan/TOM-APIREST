@@ -9,7 +9,7 @@ const router = express.Router()
 // Semana
 router.route('/api/week/:week_id')
     .get([isLogin], RoutineController.findByWeekId)
-    .patch([isLogin, isAdmin],RoutineController.editWeek)
+    .patch([isLogin, isAdmin], RoutineController.editWeek)
     .delete([isLogin, isAdmin],RoutineController.deleteWeek)
 
 
@@ -23,7 +23,7 @@ router.route('/api/user/:userId/routine/clon')
     .get(usersController.getProfileByUserId)
     .post([isLogin],RoutineController.createClonLastWeek)
 
-    router.route('/api/user/:user_id/routine/par/week')
+router.route('/api/user/:user_id/routine/par/week')
     .post([isLogin, isAdmin],RoutineController.createPARweekInRoutine)
 
 
@@ -36,14 +36,17 @@ router.route('/api/par/:id_par')
     .delete([isLogin, isAdmin],RoutineController.deletePAR)
 
     router.route('/api/week/:week_id/day')
-    .post([isLogin, isAdmin],RoutineController.createDay)
     .patch([isLogin, isAdmin],RoutineController.editWeekName)
-
-//  Día y creación de un ejercicio
-router.route('/api/week/:week_id/day/:day_id')
-    .patch([isLogin, isAdmin], RoutineController.editDay)
-    .post([isLogin,isAdmin],RoutineController.createExercise)
-    .delete([isLogin, isAdmin],RoutineController.deleteDay)
     
+router.route('/api/routine/par/multi')
+.post(RoutineController.createPARforMultipleUsersController);
+
+router.post(
+    '/api/routine/progression/multi', RoutineController.createProgressionForMultipleUsersController
+  );
+
+router.post(
+    '/api/par/:par_id/progression', RoutineController.createProgressionFromPARController
+  );
 
 export default router
