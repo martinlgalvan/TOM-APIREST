@@ -27,17 +27,6 @@ router.route('/api/user/:user_id/routine/par/week')
     .post([isLogin, isAdmin],RoutineController.createPARweekInRoutine)
 
 
-router.route('/api/user/:user_id/routine/par')
-    .get([isLogin, isAdmin],RoutineController.getPAR)
-    .post([isLogin, isAdmin],RoutineController.createPARweek)
-
-router.route('/api/par/:id_par')
-    .put(RoutineController.updatePAR)
-    .delete([isLogin, isAdmin],RoutineController.deletePAR)
-
-    router.route('/api/week/:week_id/day')
-    .patch([isLogin, isAdmin],RoutineController.editWeekName)
-    
 
 
 export default router
