@@ -22,14 +22,6 @@ router.route('/api/users/logout')
     .post(usersController.logout)
 
 
-//Para encontrar usuarios según el id del entrenador, y crearlos
-router.route('/api/users/:idEntrenador')
-    .get(usersController.getUsersByEntrenador)
-    .post(
-        [isLogin, skipForBlocks(isAdmin, checkPlanLimit, isPlanPaid, ValidateRegister)],
-        usersController.create
-      );
-
 
 
 
