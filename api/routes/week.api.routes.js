@@ -38,15 +38,6 @@ router.route('/api/par/:id_par')
     router.route('/api/week/:week_id/day')
     .patch([isLogin, isAdmin],RoutineController.editWeekName)
     
-router.route('/api/routine/par/multi')
-.post(RoutineController.createPARforMultipleUsersController);
 
-router.post(
-    '/api/routine/progression/multi', RoutineController.createProgressionForMultipleUsersController
-  );
-
-router.post(
-    '/api/par/:par_id/progression', RoutineController.createProgressionFromPARController
-  );
 
 export default router

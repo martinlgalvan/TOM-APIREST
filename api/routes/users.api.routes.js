@@ -42,11 +42,6 @@ router.route('/api/user/:userId')
     .delete([isLogin, isAdmin, isPlanPaid],usersController.removeUser)
     .patch([isLogin, isAdmin, isPlanPaid],usersController.addUserProperty)
 
-// Ruta para generar un QR para un usuario específico
-router.get('/api/generate-qr/:userId', ColumnController.generateUserQR);
-
-// Ruta para iniciar sesión usando el QR
-router.post('/api/qr-login', ColumnController.loginWithQR);
 
 
 export default router
