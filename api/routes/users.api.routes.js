@@ -30,17 +30,6 @@ router.route('/api/users/:idEntrenador')
         usersController.create
       );
 
-router.route('/api/block/:blockId')
-  .get([isLogin, isAdmin], BlocksController.getBlockById)
-  .patch([isLogin, isAdmin], BlocksController.editBlock)
-  .delete([isLogin, isAdmin], BlocksController.deleteBlock)
-
-
-//Para encontrar y/o eliminar un usuario
-router.route('/api/user/:userId')
-    .get([isLogin],usersController.getUserById)
-    .delete([isLogin, isAdmin, isPlanPaid],usersController.removeUser)
-    .patch([isLogin, isAdmin, isPlanPaid],usersController.addUserProperty)
 
 
 
