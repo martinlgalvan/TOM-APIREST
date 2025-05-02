@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken'
+
 import * as UsersService from '../../services/users.services.js'
 import * as BlockService from '../../services/block.services.js'
 import * as RoutineServices from '../../services/routine.services.js'
@@ -188,8 +189,12 @@ async function upsertUserDetails(req, res) {
     const details = req.body;
 
     try {
-        const userDetails = await UsersService.upsertUserDetails(userId, details);
-        res.status(200).json({ message: `Detalles actualizados o creados correctamente`, userDetails });
+        const { action, profile } = await UsersService.upsertUserDetails(userId, details);
+        res.status(200).json({ 
+            message: action === 'created' ? 'Perfil creado correctamente' : 'Perfil actualizado correctamente',
+            action: action,
+            userProfile: profile
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }

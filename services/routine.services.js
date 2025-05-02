@@ -154,11 +154,11 @@ async function createPARforMultipleUsers(PAR, user_ids) {
                   'video', 'notas', 'numberExercise', 'valueExercise'
                 ]);
                 // Backoff: mantener el original
-                if (typeof ex.name === 'object' && Array.isArray(ex.name.backoff)) {
-                  // no se toca
-                } else if (typeof templEx.name === 'object') {
-                  // aseguramos estructura homogénea
-                  ex.name = typeof ex.name === 'string' ? { name: ex.name } : ex.name;
+                if (templEx?.name?.backoff && Array.isArray(templEx.name.backoff)) {
+                  if (typeof ex.name !== 'object') {
+                    ex.name = { name: ex.name };
+                  }
+                  ex.name.backoff = templEx.name.backoff;
                 }
               }
             });

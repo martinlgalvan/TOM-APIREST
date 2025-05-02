@@ -122,34 +122,97 @@ async function addUserProperty(userId, category) {
 }
 
 async function upsertUserDetails(userId, details) {
-    const timestamp = new Date().getTime(); 
-    const newDetails = { 
+    const timestamp = new Date().getTime();
+    const newDetails = {
         ...details,
         last_edit: getDate(),
         timestamp: timestamp
-    }
+    };
+
+    let convertedUserId;
     try {
-        const userDetails = await userProfile.findOneAndUpdate(
-            { $or: [{"user_id" : userId}, {"user_id" : new ObjectId(userId)}]  },
-            { $set: newDetails },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
-        return userDetails;
+        convertedUserId = new ObjectId(userId);
+    } catch (error) {
+        throw new Error(`El userId proporcionado no es válido: ${userId}`);
+    }
+
+    try {
+        await client.connect();
+
+        const existingProfile = await userProfile.findOne({
+            user_id: convertedUserId
+        });
+
+        if (existingProfile) {
+            await userProfile.updateOne(
+                { _id: existingProfile._id },
+                { $set: newDetails }
+            );
+
+            return {
+                action: 'updated',
+                profile: await userProfile.findOne({ _id: existingProfile._id })
+            };
+        } else {
+            // Armado explícito del nuevo perfil
+            const newProfile = {
+                user_id: convertedUserId,
+                ...newDetails
+            };
+
+            // Validación defensiva
+            if (!newProfile.user_id || typeof newProfile.user_id !== 'object') {
+                throw new Error('Error al crear perfil: user_id no es válido o está ausente.');
+            }
+
+            // Inserción del nuevo documento
+            const insertResult = await userProfile.insertOne(newProfile);
+
+            return {
+                action: 'created',
+                profile: await userProfile.findOne({ _id: insertResult.insertedId })
+            };
+        }
     } catch (error) {
         throw new Error(`Error al actualizar o crear los detalles del usuario: ${error.message}`);
     }
 }
-
 async function findProfileByID(id) {
+    let convertedUserId;
+
+    try {
+        convertedUserId = new ObjectId(id);
+    } catch (error) {
+        throw new Error(`El userId proporcionado no es válido: ${id}`);
+    }
+
     try {
         await client.connect();
-        const user = await userProfile.findOne({$or: [{"user_id" : id}, {"user_id" : new ObjectId(id)}]});
-        return user;
+
+        const [profile, user] = await Promise.all([
+            userProfile.findOne({ user_id: convertedUserId }),
+            users.findOne({ _id: convertedUserId }, { projection: { category: 1 } })
+        ]);
+
+        if (!user) {
+            throw new Error(`No se encontró el usuario con id: ${id}`);
+        }
+
+        if (profile) {
+            return {
+                ...profile,
+                category: user.category || null
+            };
+        } else {
+            return {
+                category: user.category || null
+            };
+        }
+
     } catch (error) {
-        throw new Error(`Error al buscar el usuario: ${error.message}`);
+        throw new Error(`Error al buscar el perfil del usuario: ${error.message}`);
     }
 }
-
 export {
     getUsersByEntrenadorId,
     find,

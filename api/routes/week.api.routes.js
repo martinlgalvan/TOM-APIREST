@@ -27,7 +27,7 @@ router.route('/api/week/:week_id')
 router.route('/api/user/:userId/routine')
     .get(RoutineController.findRoutineByUserId)
     .post([isLogin, isAdmin],RoutineController.createWeek)
-    .patch(usersController.upsertUserDetails);
+    .patch([isLogin],usersController.upsertUserDetails);
 
 router.route('/api/user/:userId/routine/clon')
     .get(usersController.getProfileByUserId)
