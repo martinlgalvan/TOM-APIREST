@@ -120,13 +120,12 @@ async function createPARforMultipleUsers(PAR, user_ids) {
       clone.user_id = new ObjectId(userId);
       clone.created_at = getDate();
       clone.timestamp = timestamp;
-      clone.name = `Semana ${routines.length + 1}`; // <-- nombre automático
+      clone.name = `Semana ${routines.length + 1}`;
   
       clone.routine.forEach((day, dayIndex) => {
         const templDay = Array.isArray(template.routine) ? template.routine[dayIndex] : null;
   
         if (templDay) {
-          // Día: solo nombre si el template lo tiene
           if (templDay.name && templDay.name.trim() !== '') {
             day.name = templDay.name;
           }
@@ -137,13 +136,12 @@ async function createPARforMultipleUsers(PAR, user_ids) {
               const templEx = templDay.exercises[exIndex];
               if (!templEx) return;
   
+              // 🔁 CIRCUITO
               if (ex.circuit && Array.isArray(ex.circuit)) {
-                // 🔁 CIRCUITO
                 ex.circuit.forEach((c, cIndex) => {
                   const templC = templEx.circuit?.[cIndex];
                   if (templC) {
                     mergeFields(c, templC, ['reps', 'peso', 'video']);
-                    // name del circuito NO se pisa
                   }
                 });
                 mergeFields(ex, templEx, ['type', 'typeOfSets', 'notas', 'numberExercise']);
@@ -153,12 +151,17 @@ async function createPARforMultipleUsers(PAR, user_ids) {
                   'type', 'sets', 'reps', 'peso', 'rest',
                   'video', 'notas', 'numberExercise', 'valueExercise'
                 ]);
-                // Backoff: mantener el original
-                if (templEx?.name?.backoff && Array.isArray(templEx.name.backoff)) {
-                  if (typeof ex.name !== 'object') {
-                    ex.name = { name: ex.name };
+  
+                // ⛔ NUNCA sobrescribir el nombre
+                // ⛔ Solo mergear backoff si existe
+  
+                const templBackoff = templEx?.name?.backoff;
+                if (Array.isArray(templBackoff)) {
+                  if (typeof ex.name === 'string') {
+                    ex.name = { name: ex.name, backoff: templBackoff };
+                  } else if (typeof ex.name === 'object' && typeof ex.name.name === 'string') {
+                    ex.name.backoff = templBackoff;
                   }
-                  ex.name.backoff = templEx.name.backoff;
                 }
               }
             });
@@ -173,7 +176,7 @@ async function createPARforMultipleUsers(PAR, user_ids) {
                   'sets', 'reps', 'peso', 'video',
                   'notas', 'numberWarmup', 'valueWarmup'
                 ]);
-                // name no se pisa
+                // ⚠️ No tocar wu.name
               }
             });
           }
@@ -187,7 +190,7 @@ async function createPARforMultipleUsers(PAR, user_ids) {
                   'sets', 'reps', 'peso', 'video',
                   'notas', 'numberMobility', 'valueMobility'
                 ]);
-                // name no se pisa
+                // ⚠️ No tocar mob.name
               }
             });
           }
