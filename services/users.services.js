@@ -338,18 +338,26 @@ async function getAnnouncementsForUser(userId, category) {
     const normalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
     const dayOfMonth = now.getUTCDate();
 
+    // Primero obtener el usuario
+    const user = await users.findOne({ _id: new ObjectId(userId) });
+
+    if (!user) throw new Error("Usuario no encontrado");
+
     return announcements.find({
         $and: [
             {
                 $or: [
                     { target_users: new ObjectId(userId) },
-                    { target_categories: category }
+                    {
+                        target_categories: category,
+                        creator_id: user.entrenador_id // <- este filtro es la clave
+                    }
                 ]
             },
             { read_by: { $ne: new ObjectId(userId) } },
             {
                 $or: [
-                    { mode: 'repeat', repeat_day: normalizedDayOfWeek  },
+                    { mode: 'repeat', repeat_day: normalizedDayOfWeek },
                     { mode: 'once', show_at_date: { $gte: startOfToday, $lt: endOfToday } },
                     { mode: 'monthly', day_of_month: dayOfMonth }
                 ]
@@ -399,10 +407,16 @@ async function getAnnouncementsHistory(userId, category) {
 
     const dayOfMonth = now.getUTCDate();
 
-    const matchUser = {
+    const user = await users.findOne({ _id: new ObjectId(userId) });
+    if (!user) throw new Error("Usuario no encontrado");
+
+    const matchUserOrCategorySameTrainer = {
         $or: [
             { target_users: { $in: [new ObjectId(userId)] } },
-            { target_categories: { $in: [category] } }
+            {
+                target_categories: { $in: [category] },
+                creator_id: user.entrenador_id
+            }
         ]
     };
 
@@ -410,7 +424,7 @@ async function getAnnouncementsHistory(userId, category) {
 
     const upcoming = await announcements.find({
         $and: [
-            matchUser,
+            matchUserOrCategorySameTrainer,
             {
                 $or: [
                     { mode: 'repeat' },
@@ -424,7 +438,7 @@ async function getAnnouncementsHistory(userId, category) {
 
     const past = await announcements.find({
         $and: [
-            matchUser,
+            matchUserOrCategorySameTrainer,
             readCond
         ]
     }).toArray();
