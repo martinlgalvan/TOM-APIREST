@@ -24,7 +24,7 @@ router.route('/api/users/logout')
 router.route('/api/users/:idEntrenador')
     .get(usersController.getUsersByEntrenador)
     .post(
-        [isLogin, skipForBlocks(isAdmin, checkPlanLimit, isPlanPaid, ValidateRegister)],
+       [isLogin, skipForBlocks(isAdmin, checkPlanLimit, isPlanPaid, ValidateRegister)],
         usersController.create
       );
 
@@ -45,6 +45,42 @@ router.get('/api/generate-qr/:userId', ColumnController.generateUserQR);
 
 // Ruta para iniciar sesión usando el QR
 router.post('/api/qr-login', ColumnController.loginWithQR);
+
+router.route('/api/announcements')
+  .post([isLogin, isAdmin], usersController.createAnnouncement);
+
+router.route('/api/announcements/user/:userId')
+  .get([isLogin], usersController.getUnreadAnnouncements);
+
+router.route('/api/announcements/:announcementId/read/:userId')
+  .post([isLogin], usersController.markAnnouncementRead);
+
+router.route('/api/announcements/:announcementId/views')
+  .get([isLogin], usersController.getAnnouncementViews);
+
+  router.route('/api/announcements/:creatorId/views-count')
+  .get([isLogin],usersController.getAnnouncementViewCountsByCreator);
+
+  router.get('/api/announcements/creator/:creatorId',
+    [isLogin],
+    usersController.getAnnouncementsByCreator
+  );
+
+  router.get('/api/announcements/:announcementId/viewers',[isLogin], usersController.getAnnouncementViewsWithNames );
+  
+  // Editar anuncio
+  router.patch('/api/announcements/:announcementId',
+    [isLogin],
+    usersController.editAnnouncement
+  );
+  
+  // Eliminar anuncio
+  router.delete('/api/announcements/:announcementId',
+    [isLogin],
+    usersController.deleteAnnouncement
+  );
+
+  router.get('/api/announcements/user/:userId/history',[isLogin], usersController.getAnnouncementsHistory);
 
 
 export default router

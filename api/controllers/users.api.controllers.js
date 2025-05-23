@@ -200,6 +200,118 @@ async function upsertUserDetails(req, res) {
     }
 }
 
+async function createAnnouncement(req, res) {
+    try {
+        const data = req.body;
+        const result = await UsersService.createAnnouncement(data);
+        res.status(201).json({ message: "Anuncio creado", id: result.insertedId });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+async function getAnnouncementsByCreator(req, res) {
+    try {
+        const creatorId = req.params.creatorId;
+        const anuncios = await UsersService.getAnnouncementsByCreator(creatorId);
+        res.status(200).json(anuncios);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+async function editAnnouncement(req, res) {
+    try {
+        const announcementId = req.params.announcementId;
+        const updates = req.body;
+        await UsersService.editAnnouncement(announcementId, updates);
+        res.json({ message: "Anuncio editado correctamente" });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+async function deleteAnnouncement(req, res) {
+    try {
+        const announcementId = req.params.announcementId;
+        await UsersService.deleteAnnouncement(announcementId);
+        res.json({ message: "Anuncio eliminado correctamente" });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+async function getUnreadAnnouncements(req, res) {
+    const userId = req.params.userId;
+
+    console.log('entro')
+    try {
+        const user = await UsersService.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "Usuario no encontrado" });
+        }
+        const announcements = await UsersService.getAnnouncementsForUser(userId, user.category);
+        console.log("category:", user.category);
+            console.log("userId:", user);
+            console.log("announcements:", announcements);
+        res.status(200).json(announcements);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+async function markAnnouncementRead(req, res) {
+    try {
+        const { announcementId, userId } = req.params;
+        await UsersService.markAnnouncementAsRead(announcementId, userId);
+        res.json({ message: "Anuncio marcado como leído" });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+async function getAnnouncementViewsWithNames(req, res) {
+    try {
+        const announcementId = req.params.announcementId;
+        const readers = await UsersService.getAnnouncementViewsWithNames(announcementId);
+        res.status(200).json({ viewers: readers, count: readers.length });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+async function getAnnouncementViews(req, res) {
+    try {
+        const announcementId = req.params.announcementId;
+        const readers = await UsersService.getAnnouncementViews(announcementId);
+        res.status(200).json({ viewers: readers, count: readers.length });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+}
+
+
+
+async function getAnnouncementsHistory(req, res) {
+  try {
+    const userId = req.params.userId;
+    const user = await UsersService.findById(userId);
+    const result = await UsersService.getAnnouncementsHistory(userId, user.category);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+}
+
+ async function getAnnouncementViewCountsByCreator(req, res) {
+  try {
+    const creatorId = req.params.creatorId;
+    const counts = await UsersService.getAnnouncementViewCountsByCreator(creatorId);
+    res.status(200).json(counts);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+}
 
 
 export {
@@ -212,5 +324,17 @@ export {
     logout,
     addUserProperty,
     getProfileByUserId,
-    upsertUserDetails
+    upsertUserDetails,
+
+    createAnnouncement,
+    getUnreadAnnouncements,
+    getAnnouncementViewsWithNames,
+    markAnnouncementRead,
+    getAnnouncementViews,
+    getAnnouncementsByCreator,
+    editAnnouncement,
+    deleteAnnouncement,
+
+    getAnnouncementsHistory,
+    getAnnouncementViewCountsByCreator
 }

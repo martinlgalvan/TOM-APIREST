@@ -10,6 +10,7 @@ const client = new MongoClient(process.env.MONGODB_URI)
 const db = client.db('TOM')
 const users = db.collection('Users')
 const userProfile = db.collection('usersProfile')
+const announcements = db.collection('Announcements');
 
 async function findById(id) {
     try {
@@ -213,6 +214,225 @@ async function findProfileByID(id) {
         throw new Error(`Error al buscar el perfil del usuario: ${error.message}`);
     }
 }
+
+async function createAnnouncement(data) {
+    await client.connect();
+
+    // Convertir usuarios a ObjectId
+    if (Array.isArray(data.target_users)) {
+        data.target_users = data.target_users.map(id => new ObjectId(id));
+    }
+
+    // Normalizar fechas
+    if (data.show_at_date && typeof data.show_at_date === 'string') {
+        data.show_at_date = new Date(data.show_at_date);
+    }
+
+    if (data.creator_id && typeof data.creator_id === 'string') {
+        data.creator_id = new ObjectId(data.creator_id);
+    }
+
+    // Validar estructura de links
+    if (!Array.isArray(data.link_urls)) {
+        data.link_urls = [];
+    } else {
+        data.link_urls = data.link_urls.map(url => String(url).trim()).filter(Boolean);
+    }
+
+    // Validar modo
+    data.mode = data.mode || 'once';
+    if (data.mode === 'once') {
+        data.repeat_day = null;
+        data.day_of_month = null;
+    } else if (data.mode === 'repeat') {
+        data.show_at_date = null;
+        data.day_of_month = null;
+    } else if (data.mode === 'monthly') {
+        data.show_at_date = null;
+        data.repeat_day = null;
+    }
+
+    data.read_by = [];
+    data.created_at = new Date();
+
+    return announcements.insertOne(data);
+}
+
+
+async function getAnnouncementsByCreator(creatorId) {
+    await client.connect();
+    return announcements.find({ creator_id: new ObjectId(creatorId) }).toArray();
+}
+
+async function editAnnouncement(announcementId, updates) {
+    await client.connect();
+
+    if (Array.isArray(updates.target_users)) {
+        updates.target_users = updates.target_users.map(id => new ObjectId(id));
+    }
+
+    if (updates.creator_id && typeof updates.creator_id === 'string') {
+        updates.creator_id = new ObjectId(updates.creator_id);
+    }
+
+    if (updates.show_at_date && typeof updates.show_at_date === 'string') {
+        updates.show_at_date = new Date(updates.show_at_date);
+    }
+
+    // Validar link_urls
+    if (!Array.isArray(updates.link_urls)) {
+        updates.link_urls = [];
+    } else {
+        updates.link_urls = updates.link_urls.map(url => String(url).trim()).filter(Boolean);
+    }
+
+    // Validación defensiva del modo
+    updates.mode = updates.mode || 'once';
+    if (updates.mode === 'once') {
+        updates.repeat_day = null;
+        updates.day_of_month = null;
+    } else if (updates.mode === 'repeat') {
+        updates.show_at_date = null;
+        updates.day_of_month = null;
+    } else if (updates.mode === 'monthly') {
+        updates.show_at_date = null;
+        updates.repeat_day = null;
+    }
+
+    return announcements.updateOne(
+        { _id: new ObjectId(announcementId) },
+        { $set: updates }
+    );
+}
+
+
+
+async function deleteAnnouncement(announcementId) {
+    await client.connect();
+    return announcements.deleteOne({ _id: new ObjectId(announcementId) });
+}
+
+async function getAnnouncementViewsWithNames(announcementId) {
+    await client.connect();
+    const announcement = await announcements.findOne({ _id: new ObjectId(announcementId) });
+
+    if (!announcement || !announcement.read_by?.length) return [];
+
+    const usersRead = await users.find({ _id: { $in: announcement.read_by } }).toArray();
+
+    return usersRead.map(u => ({
+        _id: u._id,
+        name: u.name,
+        email: u.email
+    }));
+}
+async function getAnnouncementsForUser(userId, category) {
+    await client.connect();
+
+    const now = new Date();
+    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const endOfToday = new Date(startOfToday);
+    endOfToday.setUTCDate(startOfToday.getUTCDate() + 1);
+
+    const dayOfWeek = now.toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' });
+    const normalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
+    const dayOfMonth = now.getUTCDate();
+
+    return announcements.find({
+        $and: [
+            {
+                $or: [
+                    { target_users: new ObjectId(userId) },
+                    { target_categories: category }
+                ]
+            },
+            { read_by: { $ne: new ObjectId(userId) } },
+            {
+                $or: [
+                    { mode: 'repeat', repeat_day: normalizedDayOfWeek  },
+                    { mode: 'once', show_at_date: { $gte: startOfToday, $lt: endOfToday } },
+                    { mode: 'monthly', day_of_month: dayOfMonth }
+                ]
+            }
+        ]
+    }).toArray();
+}
+
+
+// Marcar anuncio como leído
+async function markAnnouncementAsRead(announcementId, userId) {
+    await client.connect();
+    return announcements.updateOne(
+        { _id: new ObjectId(announcementId) },
+        { $addToSet: { read_by: new ObjectId(userId) } }
+    );
+}
+
+// Auditoría: quién lo vio
+async function getAnnouncementViews(announcementId) {
+    await client.connect();
+    const doc = await announcements.findOne({ _id: new ObjectId(announcementId) });
+    return doc?.read_by || [];
+}
+
+ async function getAnnouncementViewCountsByCreator(creatorId) {
+  const docs = await announcements
+  .find({ creator_id: new ObjectId(creatorId) })
+    .project({ _id: 1, read_by: 1 })
+    .toArray();
+
+  const result = {};
+  docs.forEach(doc => {
+    result[doc._id.toString()] = doc.read_by?.length || 0;
+  });
+
+  return result;
+}
+
+async function getAnnouncementsHistory(userId, category) {
+    await client.connect();
+
+    const now = new Date();
+    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const endOfToday = new Date(startOfToday);
+    endOfToday.setUTCDate(startOfToday.getUTCDate() + 1);
+
+    const dayOfMonth = now.getUTCDate();
+
+    const matchUser = {
+        $or: [
+            { target_users: { $in: [new ObjectId(userId)] } },
+            { target_categories: { $in: [category] } }
+        ]
+    };
+
+    const readCond = { read_by: { $in: [new ObjectId(userId)] } };
+
+    const upcoming = await announcements.find({
+        $and: [
+            matchUser,
+            {
+                $or: [
+                    { mode: 'repeat' },
+                    { mode: 'once', show_at_date: { $gte: startOfToday } },
+                    { mode: 'monthly', day_of_month: { $gte: dayOfMonth } }
+                ]
+            },
+            { read_by: { $ne: new ObjectId(userId) } }
+        ]
+    }).toArray();
+
+    const past = await announcements.find({
+        $and: [
+            matchUser,
+            readCond
+        ]
+    }).toArray();
+
+    return { upcoming, past };
+}
+
+
 export {
     getUsersByEntrenadorId,
     find,
@@ -222,5 +442,16 @@ export {
     findById,
     addUserProperty,
     findProfileByID,
-    upsertUserDetails
+    upsertUserDetails,
+
+    createAnnouncement,
+    getAnnouncementsForUser,
+    getAnnouncementViewsWithNames,
+    markAnnouncementAsRead,
+    getAnnouncementViews,
+    getAnnouncementsByCreator,
+    editAnnouncement,
+    deleteAnnouncement,
+    getAnnouncementsHistory,
+    getAnnouncementViewCountsByCreator
 }
