@@ -267,14 +267,37 @@ async function getAnnouncementsByCreator(creatorId) {
 async function editAnnouncement(announcementId, updates) {
     await client.connect();
 
+    // Validación defensiva del ID
+    let idToEdit;
+    try {
+        idToEdit = new ObjectId(announcementId);
+    } catch (err) {
+        throw new Error("ID de anuncio inválido");
+    }
+
+    // Convertir target_users
     if (Array.isArray(updates.target_users)) {
-        updates.target_users = updates.target_users.map(id => new ObjectId(id));
+        updates.target_users = updates.target_users.map(uid => {
+            try {
+                return new ObjectId(uid);
+            } catch (err) {
+                console.error("ID inválido en target_users:", uid);
+                return null;
+            }
+        }).filter(Boolean); // elimina los nulos
     }
 
+    // Convertir creator_id
     if (updates.creator_id && typeof updates.creator_id === 'string') {
-        updates.creator_id = new ObjectId(updates.creator_id);
+        try {
+            updates.creator_id = new ObjectId(updates.creator_id);
+        } catch (err) {
+            console.warn("creator_id inválido:", updates.creator_id);
+            updates.creator_id = null;
+        }
     }
 
+    // Convertir show_at_date si es string
     if (updates.show_at_date && typeof updates.show_at_date === 'string') {
         updates.show_at_date = new Date(updates.show_at_date);
     }
@@ -286,7 +309,7 @@ async function editAnnouncement(announcementId, updates) {
         updates.link_urls = updates.link_urls.map(url => String(url).trim()).filter(Boolean);
     }
 
-    // Validación defensiva del modo
+    // Normalización de modo
     updates.mode = updates.mode || 'once';
     if (updates.mode === 'once') {
         updates.repeat_day = null;
@@ -300,10 +323,11 @@ async function editAnnouncement(announcementId, updates) {
     }
 
     return announcements.updateOne(
-        { _id: new ObjectId(announcementId) },
+        { _id: idToEdit },
         { $set: updates }
     );
 }
+
 
 
 
