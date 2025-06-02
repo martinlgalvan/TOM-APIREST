@@ -70,7 +70,6 @@ router.route('/api/announcements/:announcementId/views')
   
   // Editar anuncio
   router.patch('/api/announcements/:announcementId',
-    [isLogin],
     usersController.editAnnouncement
   );
   
@@ -82,5 +81,9 @@ router.route('/api/announcements/:announcementId/views')
 
   router.get('/api/announcements/user/:userId/history',[isLogin], usersController.getAnnouncementsHistory);
 
+router.patch(
+  '/api/user/:userId/payment-info',
+  usersController.updatePaymentInfo
+);
 
 export default router

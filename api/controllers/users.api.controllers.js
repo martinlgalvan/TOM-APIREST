@@ -314,6 +314,32 @@ async function getAnnouncementsHistory(req, res) {
 }
 
 
+async function setUserPaymentStatus(req, res) {
+    const { userId } = req.params;
+    const { isPaid } = req.body;
+
+    try {
+        const result = await UsersService.updateUserPaymentStatus(userId, isPaid);
+        res.status(200).json({ message: 'Estado de pago actualizado correctamente', result });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+}
+
+async function updatePaymentInfo(req, res) {
+  const { userId } = req.params;
+  const paymentInfo = req.body;
+
+  try {
+    const result = await UsersService.updateUserPaymentInfo(userId, paymentInfo);
+    res.status(200).json({ message: 'Información de pago actualizada', result });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+
+
 export {
     getUserById,
     getUsersByEntrenador,
@@ -336,5 +362,8 @@ export {
     deleteAnnouncement,
 
     getAnnouncementsHistory,
-    getAnnouncementViewCountsByCreator
+    getAnnouncementViewCountsByCreator,
+
+    setUserPaymentStatus,
+    updatePaymentInfo
 }

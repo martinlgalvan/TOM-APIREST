@@ -353,19 +353,12 @@ async function getAnnouncementViewsWithNames(announcementId) {
 async function getAnnouncementsForUser(userId, category) {
     await client.connect();
 
-    const now = new Date();
-    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const endOfToday = new Date(startOfToday);
-    endOfToday.setUTCDate(startOfToday.getUTCDate() + 1);
-
-    const dayOfWeek = now.toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' });
-    const normalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
-    const dayOfMonth = now.getUTCDate();
-
-    // Primero obtener el usuario
     const user = await users.findOne({ _id: new ObjectId(userId) });
-
     if (!user) throw new Error("Usuario no encontrado");
+
+    const dayOfWeek = new Date().toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' });
+    const normalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
+    const dayOfMonth = new Date().getUTCDate();
 
     return announcements.find({
         $and: [
@@ -373,22 +366,28 @@ async function getAnnouncementsForUser(userId, category) {
                 $or: [
                     { target_users: new ObjectId(userId) },
                     {
-                        target_categories: category,
-                        creator_id: user.entrenador_id // <- este filtro es la clave
+                        target_categories: { $in: [category] },
+                        creator_id: user.entrenador_id
                     }
                 ]
             },
-            { read_by: { $ne: new ObjectId(userId) } },
+            {
+                $or: [
+                    { read_by: { $exists: false } },
+                    { read_by: { $not: { $elemMatch: { $eq: new ObjectId(userId) } } } }
+                ]
+            },
             {
                 $or: [
                     { mode: 'repeat', repeat_day: normalizedDayOfWeek },
-                    { mode: 'once', show_at_date: { $gte: startOfToday, $lt: endOfToday } },
+                    { mode: 'once', show_at_date: { $lte: new Date() } }, // Mostrar aunque ya haya pasado
                     { mode: 'monthly', day_of_month: dayOfMonth }
                 ]
             }
         ]
     }).toArray();
 }
+
 
 
 // Marcar anuncio como leído
@@ -425,10 +424,6 @@ async function getAnnouncementsHistory(userId, category) {
     await client.connect();
 
     const now = new Date();
-    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const endOfToday = new Date(startOfToday);
-    endOfToday.setUTCDate(startOfToday.getUTCDate() + 1);
-
     const dayOfMonth = now.getUTCDate();
 
     const user = await users.findOne({ _id: new ObjectId(userId) });
@@ -446,29 +441,82 @@ async function getAnnouncementsHistory(userId, category) {
 
     const readCond = { read_by: { $in: [new ObjectId(userId)] } };
 
-    const upcoming = await announcements.find({
-        $and: [
-            matchUserOrCategorySameTrainer,
-            {
-                $or: [
-                    { mode: 'repeat' },
-                    { mode: 'once', show_at_date: { $gte: startOfToday } },
-                    { mode: 'monthly', day_of_month: { $gte: dayOfMonth } }
-                ]
-            },
-            { read_by: { $ne: new ObjectId(userId) } }
-        ]
-    }).toArray();
+    const upcoming = await announcements
+        .find({
+            $and: [
+                matchUserOrCategorySameTrainer,
+                {
+                    $or: [
+                        { mode: 'repeat' },
+                        { mode: 'once' },
+                        { mode: 'monthly', day_of_month: { $lte: dayOfMonth } }
+                    ]
+                },
+                {
+                    $or: [
+                        { read_by: { $exists: false } },
+                        { read_by: { $not: { $elemMatch: { $eq: new ObjectId(userId) } } } }
+                    ]
+                }
+            ]
+        })
+        .sort({ created_at: -1 })  // 👈 orden descendente
+        .toArray();
 
-    const past = await announcements.find({
-        $and: [
-            matchUserOrCategorySameTrainer,
-            readCond
-        ]
-    }).toArray();
+    const past = await announcements
+        .find({
+            $and: [
+                matchUserOrCategorySameTrainer,
+                readCond
+            ]
+        })
+        .sort({ created_at: -1 })  // 👈 orden descendente
+        .toArray();
 
     return { upcoming, past };
 }
+
+
+
+
+async function updateUserPaymentStatus(userId, isPaid) {
+    try {
+        await client.connect();
+        const result = await users.updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: { isPaid: Boolean(isPaid) } }
+        );
+        if (result.matchedCount === 0) throw new Error("Usuario no encontrado");
+        return { userId, isPaid };
+    } catch (err) {
+        throw new Error(`Error al actualizar estado de pago: ${err.message}`);
+    }
+}
+
+async function updateUserPaymentInfo(userId, paymentInfo) {
+  try {
+    await client.connect();
+
+    // Validación defensiva
+    if (typeof paymentInfo !== 'object') {
+      throw new Error('paymentInfo debe ser un objeto');
+    }
+
+    const result = await users.updateOne(
+      { _id: new ObjectId(userId) },
+      { $set: { payment_info: { ...paymentInfo } } }
+    );
+
+    if (result.matchedCount === 0) {
+      throw new Error("Usuario no encontrado");
+    }
+
+    return { userId, payment_info: paymentInfo };
+  } catch (err) {
+    throw new Error(`Error al actualizar payment_info: ${err.message}`);
+  }
+}
+
 
 
 export {
@@ -491,5 +539,8 @@ export {
     editAnnouncement,
     deleteAnnouncement,
     getAnnouncementsHistory,
-    getAnnouncementViewCountsByCreator
+    getAnnouncementViewCountsByCreator,
+
+    updateUserPaymentStatus,
+    updateUserPaymentInfo
 }
