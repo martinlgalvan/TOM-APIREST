@@ -350,15 +350,18 @@ async function getAnnouncementViewsWithNames(announcementId) {
         email: u.email
     }));
 }
+
 async function getAnnouncementsForUser(userId, category) {
     await client.connect();
 
     const user = await users.findOne({ _id: new ObjectId(userId) });
     if (!user) throw new Error("Usuario no encontrado");
 
-    const dayOfWeek = new Date().toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' });
+    const now = new Date();
+    const dayOfWeek = now.toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' });
     const normalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
-    const dayOfMonth = new Date().getUTCDate();
+    const dayOfMonth = now.getUTCDate();
+    const today = now.toISOString().split('T')[0];
 
     return announcements.find({
         $and: [
@@ -373,15 +376,30 @@ async function getAnnouncementsForUser(userId, category) {
             },
             {
                 $or: [
-                    { read_by: { $exists: false } },
-                    { read_by: { $not: { $elemMatch: { $eq: new ObjectId(userId) } } } }
-                ]
-            },
-            {
-                $or: [
-                    { mode: 'repeat', repeat_day: normalizedDayOfWeek },
-                    { mode: 'once', show_at_date: { $lte: new Date() } }, // Mostrar aunque ya haya pasado
-                    { mode: 'monthly', day_of_month: dayOfMonth }
+                    {
+                        mode: 'once',
+                        show_at_date: { $lte: now },
+                        $or: [
+                            { read_by: { $exists: false } },
+                            { read_by: { $not: { $elemMatch: { $eq: new ObjectId(userId) } } } }
+                        ]
+                    },
+                    {
+                        mode: 'repeat',
+                        repeat_day: normalizedDayOfWeek,
+                        $or: [
+                            { read_log: { $exists: false } },
+                            { read_log: { $not: { $elemMatch: { user_id: new ObjectId(userId), date: today } } } }
+                        ]
+                    },
+                    {
+                        mode: 'monthly',
+                        day_of_month: dayOfMonth,
+                        $or: [
+                            { read_log: { $exists: false } },
+                            { read_log: { $not: { $elemMatch: { user_id: new ObjectId(userId), date: today } } } }
+                        ]
+                    }
                 ]
             }
         ]
@@ -389,13 +407,21 @@ async function getAnnouncementsForUser(userId, category) {
 }
 
 
-
-// Marcar anuncio como leído
 async function markAnnouncementAsRead(announcementId, userId) {
     await client.connect();
+
+    const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+
     return announcements.updateOne(
         { _id: new ObjectId(announcementId) },
-        { $addToSet: { read_by: new ObjectId(userId) } }
+        {
+            $addToSet: {
+                read_log: {
+                    user_id: new ObjectId(userId),
+                    date: today
+                }
+            }
+        }
     );
 }
 
