@@ -361,7 +361,7 @@ async function getAnnouncementsForUser(userId, category) {
   const todayString = now.toISOString().split('T')[0]; // "YYYY-MM-DD"
   const todayStart = new Date(`${todayString}T00:00:00.000Z`);
 
-  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
   const normalizedDayOfWeek = days[now.getUTCDay()];
   const dayOfMonth = now.getUTCDate();
 
