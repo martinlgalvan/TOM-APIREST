@@ -352,80 +352,90 @@ async function getAnnouncementViewsWithNames(announcementId) {
 }
 
 async function getAnnouncementsForUser(userId, category) {
-    await client.connect();
+  await client.connect();
 
-    const user = await users.findOne({ _id: new ObjectId(userId) });
-    if (!user) throw new Error("Usuario no encontrado");
+  const user = await users.findOne({ _id: new ObjectId(userId) });
+  if (!user) throw new Error("Usuario no encontrado");
 
-    const now = new Date();
-    const today = now.toISOString().split('T')[0]; // 'YYYY-MM-DD'
-    const dayOfWeek = now.toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' });
-    const normalizedDayOfWeek = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
-    const dayOfMonth = now.getUTCDate();
-    const userObjectId = new ObjectId(userId);
+  const now = new Date();
+  const todayString = now.toISOString().split('T')[0]; // "YYYY-MM-DD"
+  const todayStart = new Date(`${todayString}T00:00:00.000Z`);
 
-    const pipeline = [
-        {
-            $match: {
-                $or: [
-                    { target_users: userObjectId },
-                    {
-                        target_categories: { $in: [category] },
-                        creator_id: user.entrenador_id
-                    }
-                ]
-            }
-        },
-        {
-            $addFields: {
-                hasReadToday: {
-                    $in: [
-                        today,
-                        {
-                            $map: {
-                                input: {
-                                    $filter: {
-                                        input: "$read_log",
-                                        as: "log",
-                                        cond: { $eq: ["$$log.user_id", userObjectId] }
-                                    }
-                                },
-                                as: "log",
-                                in: "$$log.date"
-                            }
-                        }
-                    ]
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const normalizedDayOfWeek = days[now.getUTCDay()];
+  const dayOfMonth = now.getUTCDate();
+
+  const userObjectId = new ObjectId(userId);
+
+  const pipeline = [
+    {
+      $match: {
+        $or: [
+          { target_users: userObjectId },
+          {
+            target_categories: { $in: [category] },
+            creator_id: user.entrenador_id
+          }
+        ]
+      }
+    },
+    {
+      $addFields: {
+        hasReadToday: {
+          $in: [
+            todayString,
+            {
+              $map: {
+                input: {
+                  $filter: {
+                    input: { $ifNull: ["$read_log", []] },
+                    as: "log",
+                    cond: { $eq: ["$$log.user_id", userObjectId] }
+                  }
                 },
-                hasReadOnce: {
-                    $in: [ userObjectId, { $ifNull: ["$read_by", []] } ]
-                }
+                as: "log",
+                in: "$$log.date"
+              }
             }
+          ]
         },
-        {
-            $match: {
-                $or: [
-                    {
-                        mode: 'once',
-                        show_at_date: { $lte: now },
-                        hasReadOnce: false
-                    },
-                    {
-                        mode: 'repeat',
-                        repeat_day: normalizedDayOfWeek,
-                        hasReadToday: false
-                    },
-                    {
-                        mode: 'monthly',
-                        day_of_month: dayOfMonth,
-                        hasReadToday: false
-                    }
-                ]
-            }
+        hasReadOnce: {
+          $in: [
+            userObjectId,
+            { $cond: { if: { $isArray: "$read_by" }, then: "$read_by", else: [] } }
+          ]
         }
-    ];
+      }
+    },
+    {
+      $match: {
+        $or: [
+          {
+            mode: 'once',
+            show_at_date: {
+            $gte: todayStart,
+            $lt: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
+            },
+            hasReadOnce: false
+          },
+          {
+            mode: 'repeat',
+            repeat_day: normalizedDayOfWeek,
+            hasReadToday: false
+          },
+          {
+            mode: 'monthly',
+            day_of_month: dayOfMonth,
+            hasReadToday: false
+          }
+        ]
+      }
+    }
+  ];
 
-    return announcements.aggregate(pipeline).toArray();
+  return announcements.aggregate(pipeline).toArray();
 }
+
 
 
 
@@ -441,7 +451,8 @@ async function markAnnouncementAsRead(announcementId, userId) {
                 read_log: {
                     user_id: new ObjectId(userId),
                     date: today
-                }
+                },
+                read_by: new ObjectId(userId)
             }
         }
     );
