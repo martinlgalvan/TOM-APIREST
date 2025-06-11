@@ -242,24 +242,21 @@ async function deleteAnnouncement(req, res) {
 }
 
 async function getUnreadAnnouncements(req, res) {
-    const userId = req.params.userId;
+  const userId = req.params.userId;
 
-    console.log('entro')
-    try {
-        const user = await UsersService.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: "Usuario no encontrado" });
-        }
-        const announcements = await UsersService.getAnnouncementsForUser(userId, user.category);
-        console.log("category:", user.category);
-            console.log("userId:", user);
-            console.log("announcements:", announcements);
-        res.status(200).json(announcements);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+  try {
+    const user = await UsersService.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
-}
 
+    const announcements = await UsersService.getAnnouncementsForUser(userId, user.category);
+    res.status(200).json(announcements);
+  } catch (err) {
+    console.error("Error al obtener anuncios:", err);
+    res.status(500).json({ message: "Error al obtener anuncios" });
+  }
+}
 async function markAnnouncementRead(req, res) {
     try {
         const { announcementId, userId } = req.params;

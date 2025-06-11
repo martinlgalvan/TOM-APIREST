@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 import { getDate } from './../date/formatedDate.js'
 import bcrypt from 'bcryptjs';
+import { getISOWeek } from 'date-fns';
 
 const client = new MongoClient(process.env.MONGODB_URI)
 const db = client.db('TOM')
@@ -358,83 +359,64 @@ async function getAnnouncementsForUser(userId, category) {
   if (!user) throw new Error("Usuario no encontrado");
 
   const now = new Date();
-  const todayString = now.toISOString().split('T')[0]; // "YYYY-MM-DD"
-  const todayStart = new Date(`${todayString}T00:00:00.000Z`);
-
-  const days = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
-  const normalizedDayOfWeek = days[now.getUTCDay()];
+  const today = new Date(now.toISOString().split("T")[0]); // 00:00:00 de hoy
   const dayOfMonth = now.getUTCDate();
-
+  const currentWeek = getISOWeek(now);
+  const dayOfWeek = now.toLocaleDateString('es-ES', { weekday: 'long' }).toLowerCase(); // ej: 'martes'
   const userObjectId = new ObjectId(userId);
 
-  const pipeline = [
-    {
-      $match: {
-        $or: [
-          { target_users: userObjectId },
-          {
-            target_categories: { $in: [category] },
-            creator_id: user.entrenador_id
-          }
-        ]
+  const anuncios = await announcements.find({
+    $or: [
+      { target_users: userObjectId },
+      {
+        target_categories: { $in: [category] },
+        creator_id: user.entrenador_id
       }
-    },
-    {
-      $addFields: {
-        hasReadToday: {
-          $in: [
-            todayString,
-            {
-              $map: {
-                input: {
-                  $filter: {
-                    input: { $ifNull: ["$read_log", []] },
-                    as: "log",
-                    cond: { $eq: ["$$log.user_id", userObjectId] }
-                  }
-                },
-                as: "log",
-                in: "$$log.date"
-              }
-            }
-          ]
-        },
-        hasReadOnce: {
-          $in: [
-            userObjectId,
-            { $cond: { if: { $isArray: "$read_by" }, then: "$read_by", else: [] } }
-          ]
-        }
-      }
-    },
-    {
-      $match: {
-        $or: [
-          {
-            mode: 'once',
-            show_at_date: {
-            $gte: todayStart,
-            $lt: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
-            },
-            hasReadOnce: false
-          },
-          {
-            mode: 'repeat',
-            repeat_day: normalizedDayOfWeek,
-            hasReadToday: false
-          },
-          {
-            mode: 'monthly',
-            day_of_month: dayOfMonth,
-            hasReadToday: false
-          }
-        ]
-      }
-    }
-  ];
+    ]
+  }).toArray();
 
-  return announcements.aggregate(pipeline).toArray();
+  const visibles = anuncios.filter(anuncio => {
+    const modo = anuncio.mode;
+    const readLogs = Array.isArray(anuncio.read_log) ? anuncio.read_log : [];
+
+    const logsUsuario = readLogs
+      .filter(log => log.user_id?.toString() === userId)
+      .map(log => new Date(log.date));
+
+    const fueLeidoEn = (filtroFn) => logsUsuario.some(filtroFn);
+
+    if (modo === 'once') {
+      const showDate = new Date(anuncio.show_at_date);
+      if (now >= showDate) {
+        // Se muestra si no fue leído el mismo día o después
+        return !fueLeidoEn(logDate => logDate >= showDate);
+      }
+      return false;
+    }
+
+    if (modo === 'repeat') {
+      if (anuncio.repeat_day?.toLowerCase() === dayOfWeek) {
+        return !fueLeidoEn(logDate => getISOWeek(logDate) === currentWeek);
+      }
+      return false;
+    }
+
+    if (modo === 'monthly') {
+      if (anuncio.day_of_month === dayOfMonth || dayOfMonth > anuncio.day_of_month) {
+        return !fueLeidoEn(logDate => logDate.getUTCDate() >= anuncio.day_of_month && logDate.getUTCMonth() === now.getUTCMonth());
+      }
+      return false;
+    }
+
+    return false;
+  });
+
+  return visibles;
 }
+
+
+
+
 
 
 
