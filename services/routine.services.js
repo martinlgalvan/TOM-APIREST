@@ -265,7 +265,7 @@ async function editWeek(weekID, routineArray) {
         .then(function () {
             return routine.updateOne(
                 { _id: new ObjectId(weekID) },
-                { $set: { routine: routineArray } } // Actualiza solo el campo 'routine'
+                { $set: { routine: routineArray, updated_at: new Date() } } // Actualiza solo el campo 'routine'
             );
         });
 }
@@ -311,7 +311,7 @@ async function editExercise(week_id,day_id, exercise){
         .then(function(){
             return routine.updateOne(
                 {  _id: new ObjectId(week_id) },
-                { $set: { "routine.$[day].exercises" : exercise } }, { arrayFilters: [ { $or: [{"day._id": day_id}, {"day._id": new ObjectId(day_id)}] } ] })
+                { $set: { "routine.$[day].exercises" : exercise, updated_user_at: new Date()  } }, { arrayFilters: [ { $or: [{"day._id": day_id}, {"day._id": new ObjectId(day_id)}] } ] })
              
         })
 }
