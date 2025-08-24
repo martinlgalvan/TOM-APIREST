@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "description": "es un servidor de prueba",
   "type": "module",
-  "engines": { "node": "22.x" },
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "vercel dev",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
@@ -12,7 +14,7 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^4.17.2",
@@ -23,8 +25,8 @@
     "yup": "^0.32.11"
   },
   "devDependencies": {
-    "jest": "^30.0.4",
-    "mongodb-memory-server": "^10.1.4",
+    "jest": "^30.0.5",
+    "mongodb-memory-server": "^10.2.0",
     "nodemon": "^3.1.10"
   }
 }
