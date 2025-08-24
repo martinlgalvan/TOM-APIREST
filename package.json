@@ -2,13 +2,12 @@
   "name": "servidor-node",
   "version": "1.0.0",
   "description": "es un servidor de prueba",
-  "main": "server.js",
   "type": "module",
+  "engines": { "node": "22.x" },
   "scripts": {
-    "start": "cls && nodemon express.js"
+    "dev": "vercel dev",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -17,7 +16,6 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^4.17.2",
-    "pnpm": "^9.15.9",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "update": "^0.4.2",
@@ -25,7 +23,8 @@
     "yup": "^0.32.11"
   },
   "devDependencies": {
+    "jest": "^30.0.4",
+    "mongodb-memory-server": "^10.1.4",
     "nodemon": "^3.1.10"
-  },
-  "keywords": []
+  }
 }
