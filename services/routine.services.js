@@ -28,6 +28,18 @@ async function getRoutineById(id){
       })
 }
 
+async function getLastWeekCreatedAtByUserIds(userObjectIds){
+  return client.connect()
+    .then(function(){
+      return routine.aggregate([
+        { $match: { user_id: { $in: userObjectIds } } },
+        // Si created_at es Date, esto basta; si fuera string ISO, podés envolver con {$toDate:"$created_at"}.
+        { $group: { _id: "$user_id", created_at: { $max: "$created_at" } } },
+        { $project: { _id: 0, user_id: "$_id", created_at: 1 } }
+      ]).toArray();
+    });
+}
+
 async function getRoutineByUserId(id) {
   return client.connect()
     .then(function() {
@@ -366,15 +378,10 @@ async function createPAR(PAR,user_id){
       })
 }
 
-/**
- * ✅ NUEVO: actualización genérica de propiedades de una semana
- * Aplica $set a campos “simples” con updated_at.
- * Usa whitelist interna, pero permite inyectar otra por parámetro si querés.
- */
 async function updateWeekFields(
   weekId,
   partial,
-  allowedKeys = ['visibility','name','block','block_id','tags','visible_at']
+  allowedKeys = ['visibility','name','block','block_id','tags','visible_at','comments']
 ) {
   await client.connect();
 
@@ -402,6 +409,7 @@ async function updateWeekFields(
 export {
   getRoutine,
   getRoutineById,
+  getLastWeekCreatedAtByUserIds,
   getRoutineByUserId,
   createWeek,
   editWeek,

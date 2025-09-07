@@ -32,6 +32,27 @@ function findByWeekId(req, res){
       })
 }
 
+function getLastWeeksByUserIds(req, res) {
+  // ids=uid1,uid2,uid3
+  const idsParam = (req.query.ids || '').trim();
+  if (!idsParam) {
+    return res.status(400).json({ message: "Parámetro 'ids' requerido (separado por comas)." });
+  }
+
+  const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
+
+  let objectIds;
+  try {
+    objectIds = ids.map(id => new ObjectId(id));
+  } catch (e) {
+    return res.status(400).json({ message: "Alguno de los ids no es un ObjectId válido." });
+  }
+
+  RoutineServices.getLastWeekCreatedAtByUserIds(objectIds)
+    .then(rows => res.status(200).json(rows)) // [{ user_id, created_at }]
+    .catch(err => res.status(500).json({ message: "Error al obtener últimas semanas.", error: err?.message }));
+}
+
 function findRoutineByUserId(req, res){
   const id = req.params.userId
   RoutineServices.getRoutineByUserId(id)
@@ -154,7 +175,7 @@ async function editWeek(req, res) {
   }
 }
 
-// ✅ NUEVO: actualización genérica de propiedades simples (ej. visibility, name, tags...)
+// controller.js
 async function updateWeekProperties(req, res) {
   const weekID = req.params.week_id;
   const payload = req.body;
@@ -164,14 +185,19 @@ async function updateWeekProperties(req, res) {
       return res.status(400).json({ message: 'Debe enviar un objeto con propiedades a actualizar.' });
     }
 
-    // Agregamos visible_at a la whitelist
-    const ALLOWED = ['visibility', 'name', 'block', 'block_id', 'tags', 'visible_at'];
+    // Whitelist de campos top-level
+    const ALLOWED = ['visibility', 'name', 'block', 'block_id', 'tags', 'visible_at', 'comments'];
 
     // Filtrar el payload por la whitelist
     const partial = Object.keys(payload).reduce((acc, key) => {
       if (ALLOWED.includes(key)) acc[key] = payload[key];
       return acc;
     }, {});
+
+    // --- Normalización segura de comments (PRESERVA mode y days) ---
+    if ('comments' in partial) {
+      partial.comments = normalizeComments(partial.comments);
+    }
 
     // Si llega visibility, el server define visible_at (fuente de verdad)
     if ('visibility' in partial) {
@@ -182,7 +208,7 @@ async function updateWeekProperties(req, res) {
       return res.status(400).json({ message: 'Ninguna propiedad válida para actualizar.' });
     }
 
-    await RoutineServices.updateWeekFields(weekID, partial);
+    await RoutineServices.updateWeekFields(weekID, partial, ALLOWED);
 
     const updated = await RoutineServices.getRoutineById(weekID);
     return res.status(200).json({ message: 'Semana actualizada', week: updated?.[0] || null });
@@ -192,7 +218,73 @@ async function updateWeekProperties(req, res) {
     return res.status(500).json({ message: 'Error al actualizar propiedades.', error: error.message });
   }
 }
-// =================== NAME ===================
+
+/**
+ * Normaliza comments aceptando:
+ * - modo libre: { title?, description?, mode: "free" }
+ * - modo días:  { title?, mode: "days", days: Array|Object, daysMap?: Object }
+ * 
+ * Soporta:
+ * - days como array: [{dayId, text, label?}]
+ * - days como objeto: { [dayId]: text }
+ * - daysMap como objeto alternativo
+ */
+function normalizeComments(c) {
+  const safeStr = (v, def = '') => (typeof v === 'string' ? v : def);
+  const title = (safeStr(c?.title, '').trim()) || 'Comentarios semanales';
+  const description = safeStr(c?.description, '');
+
+  const mode = c?.mode === 'days' ? 'days' : 'free';
+
+  if (mode === 'free') {
+    return {
+      title,
+      description,
+      mode: 'free'
+    };
+  }
+
+  // --- mode: 'days' ---
+  // 1) priorizamos array; si no, objeto (days o daysMap)
+  let daysArr = [];
+
+  if (Array.isArray(c?.days)) {
+    daysArr = c.days
+      .map(it => ({
+        dayId: String(it?.dayId ?? '').trim(),
+        label: typeof it?.label === 'string' ? it.label : undefined,
+        text: safeStr(it?.text, '')
+      }))
+      .filter(it => it.dayId.length > 0);
+  } else if (c?.days && typeof c.days === 'object') {
+    daysArr = Object.keys(c.days).map(k => ({
+      dayId: String(k),
+      text: safeStr(c.days[k], '')
+    }));
+  } else if (c?.daysMap && typeof c.daysMap === 'object') {
+    daysArr = Object.keys(c.daysMap).map(k => ({
+      dayId: String(k),
+      text: safeStr(c.daysMap[k], '')
+    }));
+  }
+
+  // daysMap derivado (opcional, útil para lecturas rápidas)
+  const daysMap = daysArr.reduce((acc, it) => {
+    acc[it.dayId] = it.text;
+    return acc;
+  }, {});
+
+  return {
+    title,
+    description, // por si querés usarla además del modo días
+    mode: 'days',
+    days: daysArr,
+    daysMap
+  };
+}
+
+
+
 
 function editWeekName(req, res){
   const weekID = req.params.week_id
@@ -645,6 +737,7 @@ export {
   createWeek,
   createClonLastWeek,
   findByWeekId,
+  getLastWeeksByUserIds,
   deleteWeek,
   editWeek,
   editWeekName,

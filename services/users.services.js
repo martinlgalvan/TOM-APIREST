@@ -12,6 +12,7 @@ const db = client.db('TOM')
 const users = db.collection('Users')
 const userProfile = db.collection('usersProfile')
 const announcements = db.collection('Announcements');
+const routine = db.collection('Routine'); // <-- ✅ FALTABA ESTA LÍNEA
 
 async function findById(id) {
     try {
@@ -23,16 +24,328 @@ async function findById(id) {
     }
 }
 
+
 async function getUsersByEntrenadorId(entrenador_id) {
-    return client.connect()
-      .then(async function () {
-        return users.find(
+  return client.connect()
+    .then(async function () {
+      return users
+        .find(
           { entrenador_id: new ObjectId(entrenador_id) },
           { projection: { password: 0 } }
         )
         .sort({ "created_at.fecha": -1, "created_at.hora": -1 })
         .toArray();
-      });
+    });
+}
+
+// Normaliza un campo de fecha que puede venir como Date | string ISO | {fecha, hora}
+function normalizeFieldToDate(field) {
+  try {
+    if (!field) return null;
+
+    // Si ya es Date
+    if (field instanceof Date) return field;
+
+    // Si es string (ISO u otro)
+    if (typeof field === 'string') {
+      const d = new Date(field);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // Si es objeto {fecha, hora}
+    if (typeof field === 'object' && field.fecha) {
+      const fecha = String(field.fecha || '').trim();          // "DD/MM/YYYY"
+      let hora = String(field.hora || '00:00:00').trim();      // "HH:mm:ss" o "HH:mm:ss AM/PM"
+
+      // Limpio AM/PM si viniera con 24h (e.g. "15:20:00 PM")
+      hora = hora.replace(' AM', '').replace(' PM', '');
+
+      // Parse manual DD/MM/YYYY HH:mm:ss
+      const [d, m, y] = fecha.split('/').map(Number);
+      let hh = 0, mm = 0, ss = 0;
+      const parts = hora.split(':').map(s => s.replace(/[^\d]/g, ''));
+      if (parts[0]) hh = Number(parts[0]);
+      if (parts[1]) mm = Number(parts[1]);
+      if (parts[2]) ss = Number(parts[2]);
+
+      const iso = new Date(y, (m || 1) - 1, d || 1, hh, mm, ss);
+      return isNaN(iso.getTime()) ? null : iso;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Intenta encontrar UNA rutina de un usuario probando múltiples campos/tipos.
+// Devuelve { matchedBy, doc } o null.
+async function debugFindOneRoutineForUser(routineCol, uid) {
+  const uidObj = new ObjectId(uid);
+  const uidStr = uidObj.toString();
+
+  const candidates = [
+    { q: { user_id: uidObj }, by: 'user_id:ObjectId' },
+    { q: { user_id: uidStr }, by: 'user_id:string' },
+    { q: { id_user: uidObj }, by: 'id_user:ObjectId' },
+    { q: { id_user: uidStr }, by: 'id_user:string' },
+    { q: { usuario_id: uidObj }, by: 'usuario_id:ObjectId' },
+    { q: { usuario_id: uidStr }, by: 'usuario_id:string' },
+    { q: { userId: uidObj }, by: 'userId:ObjectId' },
+    { q: { userId: uidStr }, by: 'userId:string' },
+  ];
+
+  for (const c of candidates) {
+    const doc = await routineCol.findOne(c.q, { projection: { created_at: 1, updated_at: 1 } });
+    if (doc) return { matchedBy: c.by, doc };
+  }
+  return null;
+}
+
+// ===== Función principal =====
+
+async function getUsersByEntrenadorIdWithLastWeek(entrenador_id, opts = {}) {
+  const debug = !!opts.debug;
+
+  return client.connect().then(async function () {
+    const usersCol = users;            // ya definido arriba
+    const routineCol = routine;        // A S E G Ú R A T E: const routine = db.collection('Routine')
+
+    if (debug) {
+      console.log('----- DEBUG withLastWeek START -----');
+      console.time('withLastWeek');
+
+      // 0) Ver colecciones y counts
+      const colls = await db.listCollections().toArray();
+      console.log('[DEBUG] collections =', colls.map(c => c.name));
+
+      for (const name of ['Routine','routine','Routines']) {
+        try {
+          const cnt = await db.collection(name).countDocuments();
+          console.log(`[DEBUG] count ${name} =`, cnt);
+        } catch (e) {
+          console.log(`[DEBUG] count ${name} => error (${e.message})`);
+        }
+      }
+
+      // 0.2) muestrita de Routine
+      try {
+        const one = await routineCol.findOne({}, { projection: { _id:1, user_id:1, id_user:1, usuario_id:1, userId:1, created_at:1, updated_at:1 } });
+        console.log('[DEBUG] sample from Routine =', one);
+      } catch(e) {
+        console.log('[DEBUG] Routine.findOne error:', e.message);
+      }
+
+      // muestra de usuarios
+      const sampleUsers = await usersCol
+        .find({ entrenador_id: new ObjectId(entrenador_id) }, { projection: { _id: 1, name: 1, email: 1 } })
+        .limit(3)
+        .toArray();
+
+      console.log(`[DEBUG] entrenador_id=${entrenador_id} → ${sampleUsers.length} usuarios de muestra:`,
+        sampleUsers.map(u => ({ id: u._id.toString(), name: u.name, email: u.email }))
+      );
+    }
+
+    // === PIPELINE oficial ===
+    const result = await usersCol.aggregate([
+      { $match: { entrenador_id: new ObjectId(entrenador_id) } },
+
+      // Campos que devolvemos del usuario
+      {
+        $project: {
+          _id: 1,
+          entrenador_id: 1,
+          name: 1,
+          email: 1,
+          category: 1,
+          created_at: 1
+        }
+      },
+
+      // Join con la colección correcta: "Routine"
+      {
+        $lookup: {
+          from: 'Routine',             // 👈 nombre real
+          let: { uidStr: { $toString: '$_id' } },
+          pipeline: [
+            {
+              // match si cualquiera de estos campos (cast a string) coincide con el _id del user (string)
+              $match: {
+                $expr: {
+                  $in: [
+                    "$$uidStr",
+                    [
+                      { $toString: "$user_id" },
+                      { $toString: "$id_user" },
+                      { $toString: "$usuario_id" },
+                      { $toString: "$userId" }
+                    ]
+                  ]
+                }
+              }
+            },
+
+            // Normalizamos created_at y updated_at (date|string|{fecha,hora})
+            {
+              $addFields: {
+                _created_date: {
+                  $switch: {
+                    branches: [
+                      { case: { $eq: [{ $type: "$created_at" }, "date"] }, then: "$created_at" },
+                      { case: { $eq: [{ $type: "$created_at" }, "string"] },
+                        then: {
+                          $dateFromString: {
+                            dateString: "$created_at",
+                            timezone: "America/Argentina/Buenos_Aires",
+                            onError: null, onNull: null
+                          }
+                        }
+                      },
+                      { case: { $eq: [{ $type: "$created_at" }, "object"] },
+                        then: {
+                          $let: {
+                            vars: {
+                              d: { $ifNull: ["$created_at.fecha", "" ] },
+                              t: { $ifNull: ["$created_at.hora",  "00:00:00" ] }
+                            },
+                            in: {
+                              $ifNull: [
+                                // 24h sin AM/PM
+                                {
+                                  $dateFromString: {
+                                    dateString: { $concat: [
+                                      "$$d", " ",
+                                      {
+                                        $replaceAll: {
+                                          input: {
+                                            $replaceAll: { input: "$$t", find: " PM", replacement: "" }
+                                          },
+                                          find: " AM",
+                                          replacement: ""
+                                        }
+                                      }
+                                    ]},
+                                    format: "%d/%m/%Y %H:%M:%S",
+                                    timezone: "America/Argentina/Buenos_Aires",
+                                    onError: null, onNull: null
+                                  }
+                                },
+                                // 12h con AM/PM
+                                {
+                                  $dateFromString: {
+                                    dateString: { $concat: ["$$d", " ", "$$t"] },
+                                    format: "%d/%m/%Y %I:%M:%S %p",
+                                    timezone: "America/Argentina/Buenos_Aires",
+                                    onError: null, onNull: null
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    default: null
+                  }
+                },
+
+                _updated_date: {
+                  $switch: {
+                    branches: [
+                      { case: { $eq: [{ $type: "$updated_at" }, "date"] }, then: "$updated_at" },
+                      { case: { $eq: [{ $type: "$updated_at" }, "string"] },
+                        then: {
+                          $dateFromString: {
+                            dateString: "$updated_at",
+                            timezone: "America/Argentina/Buenos_Aires",
+                            onError: null, onNull: null
+                          }
+                        }
+                      },
+                      { case: { $eq: [{ $type: "$updated_at" }, "object"] },
+                        then: {
+                          $let: {
+                            vars: {
+                              d: { $ifNull: ["$updated_at.fecha", "" ] },
+                              t: { $ifNull: ["$updated_at.hora",  "00:00:00" ] }
+                            },
+                            in: {
+                              $ifNull: [
+                                {
+                                  $dateFromString: {
+                                    dateString: { $concat: [
+                                      "$$d", " ",
+                                      {
+                                        $replaceAll: {
+                                          input: {
+                                            $replaceAll: { input: "$$t", find: " PM", replacement: "" }
+                                          },
+                                          find: " AM",
+                                          replacement: ""
+                                        }
+                                      }
+                                    ]},
+                                    format: "%d/%m/%Y %H:%M:%S",
+                                    timezone: "America/Argentina/Buenos_Aires",
+                                    onError: null, onNull: null
+                                  }
+                                },
+                                {
+                                  $dateFromString: {
+                                    dateString: { $concat: ["$$d", " ", "$$t"] },
+                                    format: "%d/%m/%Y %I:%M:%S %p",
+                                    timezone: "America/Argentina/Buenos_Aires",
+                                    onError: null, onNull: null
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    default: null
+                  }
+                }
+              }
+            },
+
+            // Orden por updated si existe, sino por created
+            { $addFields: { _sort_date: { $ifNull: ["$_updated_date", "$_created_date"] } } },
+            { $sort: { _sort_date: -1 } },
+            { $limit: 1 },
+
+            // Devolvemos un shape simple
+            { $project: { _id: 0, created_at: "$_created_date", updated_at: "$_updated_date" } }
+          ],
+          as: 'lastWeek'
+        }
+        
+      },
+
+      // A nivel usuario: tomamos el primer (y único) elemento del array
+      {
+        $addFields: {
+          last_week_created_at: { $ifNull: [ { $arrayElemAt: [ "$lastWeek.created_at", 0 ] }, null ] },
+          last_week_updated_at: { $ifNull: [ { $arrayElemAt: [ "$lastWeek.updated_at", 0 ] }, null ] }
+        }
+      },
+      { $project: { lastWeek: 0 } },
+
+      // (opcional) tu orden original por creado del usuario
+      { $sort: { "created_at.fecha": -1, "created_at.hora": -1 } }
+    ]).toArray();
+
+    if (debug) {
+      const nonNull = result.filter(u => u.last_week_created_at || u.last_week_updated_at).length;
+      console.log(`[DEBUG] total usuarios: ${result.length} | con lastWeek no nulo: ${nonNull}`);
+      console.timeEnd('withLastWeek');
+      console.log('----- DEBUG withLastWeek END -----');
+    }
+
+    return result;
+  });
 }
 
 async function login(userLogin) {
@@ -562,6 +875,7 @@ async function updateUserPaymentInfo(userId, paymentInfo) {
 
 export {
     getUsersByEntrenadorId,
+    getUsersByEntrenadorIdWithLastWeek,
     find,
     create,
     remove,

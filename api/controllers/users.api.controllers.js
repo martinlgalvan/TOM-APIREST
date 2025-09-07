@@ -75,32 +75,46 @@ function find(req, res) {
 
 
 function getUsersByEntrenador(req, res) {
-    const entrenador_id = req.params.idEntrenador;
-  
-    // ✅ Si el query string incluye `blocks=true`, devolvemos bloques
-    if (req.query.blocks === 'true') {
-      return BlockService.findByUserId(entrenador_id)
-        .then(blocks => {
-          res.status(200).json(blocks);
-        })
-        .catch(error => {
-          res.status(500).json({ message: "Error al obtener los bloques.", error: error.message });
-        });
-    }
-  
-    // 👥 Si no hay query especial, devolvemos los usuarios
-    UsersService.getUsersByEntrenadorId(entrenador_id)
-      .then(users => {
-        if (users) {
-          res.status(200).json(users);
-        } else {
-          res.status(404).json({ message: "No es posible realizar esta acción." });
-        }
-      })
+  const entrenador_id = req.params.idEntrenador;
+  const debug = req.query.debug === 'true' || req.query.debug === '1';
+
+  // blocks=true => mismo comportamiento de siempre
+  if (req.query.blocks === 'true') {
+    return BlockService.findByUserId(entrenador_id)
+      .then(blocks => res.status(200).json(blocks))
       .catch(error => {
-        res.status(500).json({ message: "Error al obtener los usuarios." });
+        console.error('[getUsersByEntrenador][blocks]', error);
+        res.status(500).json({ message: "Error al obtener los bloques.", error: error.message });
       });
   }
+
+  // withLastWeek=true => usuarios + última semana (con debug opcional)
+  if (req.query.withLastWeek === 'true') {
+    return UsersService.getUsersByEntrenadorIdWithLastWeek(entrenador_id, { debug })
+      .then(users => {
+        if (users) return res.status(200).json(users);
+        return res.status(404).json({ message: "No es posible realizar esta acción." });
+      })
+      .catch(error => {
+        console.error('[getUsersByEntrenador][withLastWeek]', error);
+        res.status(500).json({ message: "Error al obtener los usuarios con última semana.", error: error.message });
+      });
+  }
+
+  // default => usuarios “comunes”
+  UsersService.getUsersByEntrenadorId(entrenador_id)
+    .then(users => {
+      if (users) {
+        res.status(200).json(users);
+      } else {
+        res.status(404).json({ message: "No es posible realizar esta acción." });
+      }
+    })
+    .catch(error => {
+      console.error('[getUsersByEntrenador][default]', error);
+      res.status(500).json({ message: "Error al obtener los usuarios.", error: error.message });
+    });
+}
 
 
 function create(req, res) {

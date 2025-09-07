@@ -19,10 +19,12 @@ router.route('/api/week/:week_id')
     .patch([isLogin, isAdmin], RoutineController.editWeek)
     .delete([isLogin, isAdmin],RoutineController.deleteWeek)
 
+router.get('/api/weeks/last-created', [isLogin], RoutineController.getLastWeeksByUserIds);
+
 // ✅ NUEVO: actualización genérica de propiedades simples de la semana
 router.route('/api/week/:week_id/properties')
     .patch([isLogin, isAdmin], RoutineController.updateWeekProperties)
-
+ 
 
 //Para crear una semana de la rutina de un usuario
 router.route('/api/user/:userId/routine')
