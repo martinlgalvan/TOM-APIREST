@@ -7,6 +7,155 @@ import * as UsersService from '../../services/users.services.js';
 import * as RoutineServices from '../../services/routine.services.js'
 import * as PARservices from '../../services/PAR.services.js'
 
+//HELPERS 
+
+// Clon profundo seguro (sin JSON.stringify para no romper ObjectId)
+function deepClone(obj) {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (obj instanceof Date) return new Date(obj.getTime());
+  if (obj instanceof ObjectId) return new ObjectId(obj.toString());
+  if (Array.isArray(obj)) return obj.map(deepClone);
+  const out = {};
+  for (const k of Object.keys(obj)) out[k] = deepClone(obj[k]);
+  return out;
+}
+
+// Regenera IDs y normaliza estructuras en TODA la semana
+function remapWeekIds(week) {
+  const out = deepClone(week);
+
+  // semana
+  out._id = new ObjectId();
+
+  // opcional: normalizar visibilidad en clones
+  out.visibility = 'visible';
+
+  // días
+  out.routine = (out.routine || []).map((day, dayIdx) => {
+    const d = deepClone(day);
+    d._id = new ObjectId();
+    d.lastEdited = new Date().toISOString();
+
+    // warmup
+    if (Array.isArray(d.warmup)) {
+      d.warmup = d.warmup.map(w => ({
+        ...deepClone(w),
+        warmup_id: new ObjectId()
+      }));
+    }
+
+    // movility (ojo al nombre que usás en DB)
+    if (Array.isArray(d.movility)) {
+      d.movility = d.movility.map(m => ({
+        ...deepClone(m),
+        movility_id: new ObjectId()
+      }));
+    }
+
+    // ejercicios (incluye sueltos / bloques / circuitos)
+    if (Array.isArray(d.exercises)) {
+      d.exercises = d.exercises.map((ex, exIdx) => remapExerciseLike(ex));
+      // Re-enumerar por si hace falta
+      d.exercises.forEach((ex, i) => {
+        if (ex && typeof ex === 'object') {
+          ex.numberExercise = ex.numberExercise ?? (i + 1);
+        }
+      });
+    }
+
+    return d;
+  });
+
+  return out;
+}
+
+// Normaliza y regenera IDs según el tipo de estructura
+function remapExerciseLike(node) {
+  const n = deepClone(node);
+
+  // Ejercicio suelto
+  if (n.type === 'exercise') {
+    n.exercise_id = new ObjectId();
+
+    // Si name es objeto (aproximaciones/backoff), no tocar el contenido, solo clonar
+    if (n.name && typeof n.name === 'object') {
+      n.name = deepClone(n.name);
+    }
+    return n;
+  }
+
+  // Bloque
+  if (n.type === 'block') {
+    n.block_id = new ObjectId();
+    n.exercises = Array.isArray(n.exercises)
+      ? n.exercises.map(inner => remapExerciseLike(inner))
+      : [];
+    return n;
+  }
+
+  // Circuito a nivel raíz o dentro de bloque (tu código no usa 'type' fijo aquí)
+  if (Array.isArray(n.circuit)) {
+    // Circuito “header”
+    n.exercise_id = new ObjectId();          // para identificar el objeto-circuito en sí
+    n.numberExercise = n.numberExercise ?? 0;
+    n.circuit = n.circuit.map(item => ({
+      ...deepClone(item),
+      // Ítems del circuito no tienen exercise_id propio; mantené un idRefresh único
+      idRefresh: (item && item.idRefresh) ? item.idRefresh : new ObjectId().toString(),
+    }));
+    return n;
+  }
+
+  // Fallback: si no matchea nada, tratar como ejercicio suelto por seguridad
+  n.exercise_id = new ObjectId();
+  return n;
+}
+
+// Verifica que no existan exercise_id duplicados por día
+function assertNoDuplicateExerciseIdsByDay(week) {
+  for (const day of (week.routine || [])) {
+    const ids = new Set();
+    for (const ex of (day.exercises || [])) {
+      collectExerciseIds(ex, ids);
+    }
+  }
+}
+function collectExerciseIds(node, idsSet) {
+  if (!node || typeof node !== 'object') return;
+
+  if (node.type === 'exercise') {
+    const idStr = String(node.exercise_id);
+    if (idsSet.has(idStr)) {
+      const err = new Error(`exercise_id duplicado en el mismo día: ${idStr}`);
+      err.status = 400;
+      throw err;
+    }
+    idsSet.add(idStr);
+    return;
+  }
+
+  if (node.type === 'block') {
+    for (const inner of (node.exercises || [])) collectExerciseIds(inner, idsSet);
+    return;
+  }
+
+  if (Array.isArray(node.circuit)) {
+    // El “circuito” tiene exercise_id propio (encabezado del circuito)
+    if (node.exercise_id) {
+      const idStr = String(node.exercise_id);
+      if (idsSet.has(idStr)) {
+        const err = new Error(`exercise_id duplicado (circuito) en el mismo día: ${idStr}`);
+        err.status = 400;
+        throw err;
+      }
+      idsSet.add(idStr);
+    }
+    // Ítems del circuito NO suman exercise_id (tienen idRefresh)
+    return;
+  }
+}
+
+
 // =================== LIST / FIND ===================
 
 function findAll(req, res){
@@ -88,50 +237,39 @@ function createWeek(req, res){
       })
 }
 
-function createClonLastWeek(req, res){
-  const user_id = req.params.userId
-  const fecha = req.body.fecha
-  const week = {
-      name: req.body.name,
-      routine: [{}]
+async function createClonLastWeek(req, res) {
+  try {
+    const user_id = req.params.userId;
+    const { fecha } = req.body;
+
+    // Traemos la rutina actual (asumís orden DESC en servicio)
+    const data = await RoutineServices.getRoutineByUserId(user_id);
+    if (!data || !data.length) {
+      return res.status(404).json({ message: 'El usuario no tiene semanas previas para clonar.' });
+    }
+
+    // ¡No mutar! — clonar profundo y luego regenerar IDs
+    const lastWeek = data[0];
+    let draft = remapWeekIds(lastWeek);
+
+    // Nombre según modo
+    if (fecha === 'isDate') {
+      draft.name = `Semana del ${new Date().toLocaleDateString()}`;
+    } else {
+      draft.name = `Semana ${data.length + 1}`;
+    }
+
+    // Validación de integridad: no permitir exercise_id repetidos por día
+    assertNoDuplicateExerciseIdsByDay(draft);
+
+    // Guardar
+    const saved = await RoutineServices.createWeek(draft, user_id);
+    return res.status(201).json(saved);
+  } catch (err) {
+    console.error('Error en createClonLastWeek:', err);
+    const status = err.status || 500;
+    return res.status(status).json({ message: err.message || 'Error interno' });
   }
-
-  if(req.body.routine){
-      week.routine = req.body.routine
-  } 
-
-  RoutineServices.getRoutineByUserId(user_id) 
-      .then((data) =>{
-          let ultimoArr = data[0]
-          ultimoArr._id = new ObjectId()
-          if(fecha == "isDate"){
-              ultimoArr.name = `Semana del ${new Date().toLocaleDateString()}` ;
-          } else{
-              ultimoArr.name = `Semana ${data.length + 1}`
-          }
-
-          // si querés normalizar la visibility en clones:
-          ultimoArr.visibility = 'visible'
-
-          for (let i = 0; i < ultimoArr.routine.length; i++) {
-              ultimoArr.routine[i]._id = new ObjectId()
-              if(ultimoArr.routine[i].exercises != undefined){
-                  for (let j = 0; j < ultimoArr.routine[i].exercises.length; j++) {
-                      ultimoArr.routine[i].exercises[j].exercise_id = new ObjectId()
-                  }
-              }
-              if(ultimoArr.routine[i].warmup != undefined){
-                  for (let j = 0; j < ultimoArr.routine[i].warmup.length; j++) {
-                      ultimoArr.routine[i].warmup[j].warmup_id = new ObjectId()
-                  }
-              }
-          }
-
-          RoutineServices.createWeek(ultimoArr,user_id)
-              .then((data) => {
-                  res.status(201).json(data)
-              })
-      })
 }
 
 // =================== UPDATE ===================

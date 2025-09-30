@@ -349,6 +349,106 @@ async function updatePaymentInfo(req, res) {
   }
 }
 
+ async function getLedgerGrouped(req, res) {
+  const { ownerId } = req.params;
+  const { from, to, limit = 200, sort = 'desc' } = req.query;
+  try {
+    const out = await UsersService.getLedgerGrouped(ownerId, {
+      from, to, limit: Number(limit), sort: String(sort)
+    });
+    res.status(200).json(out); // { expenses, cashflows, extraSales }
+  } catch (error) {
+    const code = /invalid|param/i.test(error.message) ? 400 : 500;
+    res.status(code).json({ message: error.message });
+  }
+}
+
+ async function listItems(req, res) {
+  const { ownerId } = req.params;
+  const { tipo, from, to, page = 1, limit = 20, sort = 'desc' } = req.query;
+  try {
+    const out = await UsersService.listItems(ownerId, {
+      tipo, from, to, page: Number(page), limit: Number(limit), sort: String(sort)
+    });
+    res.status(200).json(out); // { items, page, limit, total }
+  } catch (error) {
+    const code = /invalid|param/i.test(error.message) ? 400 : 500;
+    res.status(code).json({ message: error.message });
+  }
+}
+
+ async function getSummary(req, res) {
+  const { ownerId } = req.params;
+  const { from, to } = req.query;
+  try {
+    const out = await UsersService.getSummary(ownerId, { from, to });
+    res.status(200).json(out); // { ingresos, retiros, gastos, saldo }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+ async function createExpense(req, res) {
+  const { ownerId } = req.params;
+  const { categoria, nombre, monto, descripcion, fecha } = req.body || {};
+  try {
+    const item = await UsersService.createExpense(ownerId, { categoria, nombre, monto, descripcion, fecha });
+    res.status(201).json(item);
+  } catch (error) {
+    const code = /invalid|falt|categoria|monto/i.test(error.message) ? 400 : 500;
+    res.status(code).json({ message: error.message });
+  }
+}
+
+ async function createCashflow(req, res) {
+  const { ownerId } = req.params;
+  const { tipo, concepto, monto, descripcion, fecha } = req.body || {};
+  try {
+    const item = await UsersService.createCashflow(ownerId, { tipo, concepto, monto, descripcion, fecha });
+    res.status(201).json(item);
+  } catch (error) {
+    const code = /invalid|falt|tipo|monto/i.test(error.message) ? 400 : 500;
+    res.status(code).json({ message: error.message });
+  }
+}
+
+async function createExtraSale(req, res) {
+  const { ownerId } = req.params;
+  const { nombre, monto, fecha } = req.body || {};
+  try {
+    const sale = await UsersService.createExtraSale(ownerId, { nombre, monto, fecha });
+    res.status(201).json(sale); // 👈 solo sale
+  } catch (error) {
+    const code = /invalid|falt|monto/i.test(error.message) ? 400 : 500;
+    res.status(code).json({ message: error.message });
+  }
+}
+
+
+ async function updateItem(req, res) {
+  const { ownerId, itemId } = req.params;
+  const patch = req.body || {};
+  try {
+    const item = await UsersService.updateItem(ownerId, itemId, patch);
+    if (!item) return res.status(404).json({ message: 'Ítem no encontrado' });
+    res.status(200).json(item);
+  } catch (error) {
+    const code = /invalid|param|tipo|monto|categoria/i.test(error.message) ? 400 : 500;
+    res.status(code).json({ message: error.message });
+  }
+}
+
+ async function deleteItem(req, res) {
+  const { ownerId, itemId } = req.params;
+  try {
+    const ok = await UsersService.deleteItem(ownerId, itemId);
+    if (!ok) return res.status(404).json({ message: 'Ítem no encontrado' });
+    res.status(200).json({ message: 'Ítem eliminado' });
+  } catch (error) {
+    const code = /invalid|param/i.test(error.message) ? 400 : 500;
+    res.status(code).json({ message: error.message });
+  }
+}
 
 
 export {
@@ -376,5 +476,14 @@ export {
     getAnnouncementViewCountsByCreator,
 
     setUserPaymentStatus,
-    updatePaymentInfo
+    updatePaymentInfo,
+    getLedgerGrouped,
+    listItems,
+    getSummary,
+    createExpense,
+    createCashflow,
+    createExtraSale,
+    updateItem,
+    deleteItem
+ 
 }
