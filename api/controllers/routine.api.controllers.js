@@ -692,9 +692,11 @@ function deletePAR(req, res) {
 
 function createPARweek(req, res){
   const user_id = req.params.user_id
+  console.log(req.body)
   const week = {
       name: req.body.name,
-      routine: [{}]
+      routine: [{}],
+      category: req.body.category
   }
   if(req.body.routine){
       week.routine = req.body.routine

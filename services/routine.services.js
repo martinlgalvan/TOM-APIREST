@@ -98,16 +98,111 @@ async function createPARforMultipleUsers(PAR, user_ids) {
     });
 }
 
+// === Helpers locales para createProgressionForMultipleUsers ===
+
+// Alinea nombres: si el template trae "mobility", lo mapeamos a "movility".
+// Si trae ambas, priorizamos "movility".
+function normalizeMovilityKeys(day) {
+  const d = { ...day };
+  if (d && d.mobility && !d.movility) d.movility = d.mobility;
+  delete d.mobility;
+  return d;
+}
+
+// Convierte posibles variantes de "name" a string para comparar (si viene objeto {name, backoff}).
+function keyOfName(nameField) {
+  if (typeof nameField === 'string') return nameField.trim();
+  if (nameField && typeof nameField === 'object' && typeof nameField.name === 'string') {
+    return nameField.name.trim();
+  }
+  return '';
+}
+
+// Obtiene una "clave estable" para matching por elemento.
+// Para ejercicios: numberExercise > nombre > índice
+// Para warmup: numberWarmup > nombre > índice
+// Para movility: numberMobility > nombre > índice
+function keyOf(element, kind, fallbackIndex) {
+  if (!element || typeof element !== 'object') return `__idx__${fallbackIndex}`;
+  if (kind === 'exercise') {
+    if (element.numberExercise != null) return `NE#${String(element.numberExercise)}`;
+    const nm = keyOfName(element.name);
+    if (nm) return `NM#${nm}`;
+  } else if (kind === 'warmup') {
+    if (element.numberWarmup != null) return `NW#${String(element.numberWarmup)}`;
+    const nm = keyOfName(element.name);
+    if (nm) return `NM#${nm}`;
+  } else if (kind === 'movility') {
+    if (element.numberMobility != null) return `NMV#${String(element.numberMobility)}`;
+    const nm = keyOfName(element.name);
+    if (nm) return `NM#${nm}`;
+  }
+  return `__idx__${fallbackIndex}`;
+}
+
+// Dado un elemento de template y una lista base del usuario,
+// intenta encontrar el índice del mejor match usando la clave estable.
+function matchIndex(templateEl, baseList, kind, fallbackIndex) {
+  const tKey = keyOf(templateEl, kind, fallbackIndex);
+  if (!Array.isArray(baseList) || !baseList.length) return -1;
+  for (let i = 0; i < baseList.length; i++) {
+    const bKey = keyOf(baseList[i], kind, i);
+    if (bKey === tKey) return i;
+  }
+  // sin match estable, devolvemos -1 para forzar "nuevo desde template"
+  return -1;
+}
+
+/**
+ * Sincroniza una lista (ejercicios/warmup/movility) **guiada por el template**,
+ * mergeando campos "suaves" como ya hacías:
+ * - Si un item existe en base (match por clave estable) se toma ese como base y se pisan campos con template usando mergeFields.
+ * - Si no existe en base, se crea **nuevo** desde template.
+ * - No se arrastran "sobrantes" de base que no estén en template (respeta eliminaciones).
+ *
+ * @param {Array} templList lista del template (en orden final deseado)
+ * @param {Array} baseList lista base del usuario (última semana)
+ * @param {'exercise'|'warmup'|'movility'} kind
+ * @param {Function} applyMergeFn callback que recibe (baseItem, templItem) y hace los mergeFields específicos (tu lógica existente).
+ * @returns {Array} lista sincronizada
+ */
+function syncByTemplateList(templList, baseList, kind, applyMergeFn) {
+  const result = [];
+  const safeTempl = Array.isArray(templList) ? templList : [];
+
+  for (let idx = 0; idx < safeTempl.length; idx++) {
+    const templItem = safeTempl[idx];
+    if (!templItem) continue;
+
+    const baseIdx = matchIndex(templItem, baseList, kind, idx);
+    const baseItem = baseIdx >= 0 ? baseList[baseIdx] : {};
+
+    // Copia superficial para poder mutar y luego regenerar IDs
+    const merged = JSON.parse(JSON.stringify(baseItem || {}));
+    applyMergeFn(merged, templItem);
+    result.push(merged);
+  }
+
+  return result;
+}
+
+
+// === Reemplazo completo de tu createProgressionForMultipleUsers ===
+
 async function createProgressionForMultipleUsers(template, user_ids) {
   const timestamp = Date.now();
   await client.connect();
   const newWeeks = [];
+
+  // Aseguramos routine del template; si no viene, queremos una semana sin días (respeta eliminación total)
+  const templRoutine = Array.isArray(template?.routine) ? template.routine : [];
 
   for (const userId of user_ids) {
     const routines = await getRoutineByUserId(userId);
     const lastWeek = routines[0];
     if (!lastWeek) continue;
 
+    // Base clon: mantenemos tu estrategia de clonar la última semana
     const clone = JSON.parse(JSON.stringify(lastWeek));
     clone._id = new ObjectId();
     clone.user_id = new ObjectId(userId);
@@ -115,76 +210,119 @@ async function createProgressionForMultipleUsers(template, user_ids) {
     clone.timestamp = timestamp;
     clone.name = `Semana ${routines.length + 1}`;
 
-    clone.routine.forEach((day, dayIndex) => {
-      const templDay = Array.isArray(template.routine) ? template.routine[dayIndex] : null;
+    // === SINCRONIZACIÓN DE ESTRUCTURA: la estructura final la dicta el template ===
+    // Normalizamos posibles "mobility" -> "movility" en template
+    const normalizedTemplDays = templRoutine.map(normalizeMovilityKeys);
 
-      if (templDay) {
-        if (templDay.name && templDay.name.trim() !== '') {
-          day.name = templDay.name;
+    // Armamos nueva lista de días SOLO a partir del template
+    const baseDays = Array.isArray(lastWeek.routine) ? lastWeek.routine.map(normalizeMovilityKeys) : [];
+    const newDays = [];
+
+    normalizedTemplDays.forEach((templDay, dayIndex) => {
+      // Elegir "baseDay" por mejor match: numberDay > name > índice
+      const findBaseDayIndex = (td) => {
+        // por numberDay
+        if (td?.numberDay != null) {
+          const i = baseDays.findIndex((bd) => bd?.numberDay === td.numberDay);
+          if (i >= 0) return i;
         }
-
-        // === EXERCISES ===
-        if (Array.isArray(templDay.exercises) && Array.isArray(day.exercises)) {
-          day.exercises.forEach((ex, exIndex) => {
-            const templEx = templDay.exercises[exIndex];
-            if (!templEx) return;
-
-            // CIRCUITO
-            if (ex.circuit && Array.isArray(ex.circuit)) {
-              ex.circuit.forEach((c, cIndex) => {
-                const templC = templEx.circuit?.[cIndex];
-                if (templC) {
-                  mergeFields(c, templC, ['reps', 'peso', 'video']);
-                }
-              });
-              mergeFields(ex, templEx, ['type', 'typeOfSets', 'notas', 'numberExercise']);
-            } else {
-              // SIMPLE
-              mergeFields(ex, templEx, [
-                'type', 'sets', 'reps', 'peso', 'rest',
-                'video', 'notas', 'numberExercise', 'valueExercise'
-              ]);
-
-              const templBackoff = templEx?.name?.backoff;
-              if (Array.isArray(templBackoff)) {
-                if (typeof ex.name === 'string') {
-                  ex.name = { name: ex.name, backoff: templBackoff };
-                } else if (typeof ex.name === 'object' && typeof ex.name.name === 'string') {
-                  ex.name.backoff = templBackoff;
-                }
-              }
-            }
-          });
+        // por name
+        const tName = keyOfName(td?.name);
+        if (tName) {
+          const i = baseDays.findIndex((bd) => keyOfName(bd?.name) === tName);
+          if (i >= 0) return i;
         }
+        // fallback por índice
+        return dayIndex < baseDays.length ? dayIndex : -1;
+      };
 
-        // === WARMUP ===
-        if (Array.isArray(templDay.warmup) && Array.isArray(day.warmup)) {
-          day.warmup.forEach((wu, wuIndex) => {
-            const templWu = templDay.warmup[wuIndex];
-            if (templWu) {
-              mergeFields(wu, templWu, [
-                'sets', 'reps', 'peso', 'video',
-                'notas', 'numberWarmup', 'valueWarmup'
-              ]);
-            }
-          });
-        }
+      const baseIdx = findBaseDayIndex(templDay);
+      const baseDay = baseIdx >= 0 ? baseDays[baseIdx] : {};
 
-        // === MOVILITY ===
-        if (Array.isArray(templDay.movility) && Array.isArray(day.movility)) {
-          day.movility.forEach((mob, mobIndex) => {
-            const templMob = templDay.movility[mobIndex];
-            if (templMob) {
-              mergeFields(mob, templMob, [
-                'sets', 'reps', 'peso', 'video',
-                'notas', 'numberMobility', 'valueMobility'
-              ]);
-            }
-          });
-        }
+      // Copiamos base para mutar
+      const day = JSON.parse(JSON.stringify(baseDay || {}));
+
+      // ==== NAME del día
+      if (templDay?.name && String(templDay.name).trim() !== '') {
+        day.name = templDay.name;
       }
 
-      // === ID REGENERATION ===
+      // ==== EXERCISES ====
+      const applyMergeExercise = (ex, templEx) => {
+        if (!templEx) return;
+
+        // Si hay circuito en el EJERCICIO del usuario, merge por índice
+        if (ex.circuit && Array.isArray(ex.circuit)) {
+          if (!Array.isArray(templEx.circuit)) templEx.circuit = [];
+          ex.circuit = ex.circuit.map((c, cIndex) => {
+            const mergedC = { ...c };
+            const templC = templEx.circuit[cIndex];
+            if (templC) {
+              mergeFields(mergedC, templC, ['reps', 'peso', 'video']);
+            }
+            return mergedC;
+          });
+          mergeFields(ex, templEx, ['type', 'typeOfSets', 'notas', 'numberExercise']);
+        } else {
+          // SIMPLE
+          mergeFields(ex, templEx, [
+            'type', 'sets', 'reps', 'peso', 'rest',
+            'video', 'notas', 'numberExercise', 'valueExercise'
+          ]);
+
+          // backoff en nombre si el template lo trae
+          const templBackoff = templEx?.name?.backoff;
+          if (Array.isArray(templBackoff)) {
+            if (typeof ex.name === 'string') {
+              ex.name = { name: ex.name, backoff: templBackoff };
+            } else if (typeof ex.name === 'object' && typeof ex.name.name === 'string') {
+              ex.name.backoff = templBackoff;
+            } else if (!ex.name) {
+              ex.name = { name: '', backoff: templBackoff };
+            }
+          }
+        }
+      };
+
+      // Lista final de ejercicios, SIGUE la del template (respeta altas/bajas)
+      day.exercises = syncByTemplateList(
+        templDay?.exercises,
+        Array.isArray(baseDay?.exercises) ? baseDay.exercises : [],
+        'exercise',
+        applyMergeExercise
+      );
+
+      // ==== WARMUP ====
+      const applyMergeWarmup = (wu, templWu) => {
+        mergeFields(wu, templWu, [
+          'sets', 'reps', 'peso', 'video',
+          'notas', 'numberWarmup', 'valueWarmup'
+        ]);
+      };
+
+      day.warmup = syncByTemplateList(
+        templDay?.warmup,
+        Array.isArray(baseDay?.warmup) ? baseDay.warmup : [],
+        'warmup',
+        applyMergeWarmup
+      );
+
+      // ==== MOVILITY (normalizado) ====
+      const applyMergeMov = (mob, templMob) => {
+        mergeFields(mob, templMob, [
+          'sets', 'reps', 'peso', 'video',
+          'notas', 'numberMobility', 'valueMobility'
+        ]);
+      };
+
+      day.movility = syncByTemplateList(
+        templDay?.movility,
+        Array.isArray(baseDay?.movility) ? baseDay.movility : [],
+        'movility',
+        applyMergeMov
+      );
+
+      // ==== ID REGENERATION ====
       day._id = new ObjectId();
 
       if (Array.isArray(day.exercises)) {
@@ -207,7 +345,13 @@ async function createProgressionForMultipleUsers(template, user_ids) {
           movility_id: new ObjectId()
         }));
       }
+
+      newDays.push(day);
     });
+
+    // La rutina final es EXACTAMENTE la del template (orden y cantidad),
+    // con campos mergeados desde la base donde correspondía.
+    clone.routine = newDays;
 
     newWeeks.push(clone);
   }
@@ -215,6 +359,7 @@ async function createProgressionForMultipleUsers(template, user_ids) {
   await routine.insertMany(newWeeks);
   return newWeeks;
 }
+
 
 function mergeFields(target, source, fields) {
   fields.forEach(field => {
