@@ -201,7 +201,7 @@ export async function createProgressionFromPAR(parId) {
     throw new Error('PAR madre no encontrada');
   }
 
-  // 3) Buscar última progresión del root (por timestamp desc)
+  // 3) Buscar última progresión del root (por timestamp desc) asdas
   //    Incluimos compatibilidad por si parent_par_id quedó guardado como string.
   const lastProg = await par
     .find({
