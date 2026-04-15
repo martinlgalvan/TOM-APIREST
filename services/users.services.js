@@ -12,7 +12,8 @@ const db = client.db('TOM')
 const users = db.collection('Users')
 const userProfile = db.collection('usersProfile')
 const announcements = db.collection('Announcements');
-const routine = db.collection('Routine'); // <-- ✅ FALTABA ESTA LÍNEA
+const routine = db.collection('Routine'); // <-- ✅ FALTABA ESTA LINEA
+const finance = db.collection('Finance');
 
 async function findById(id) {
     try {
@@ -78,7 +79,177 @@ function normalizeFieldToDate(field) {
   }
 }
 
-// Intenta encontrar UNA rutina de un usuario probando múltiples campos/tipos.
+function asString(value, maxLen = 500) {
+    if (value == null) return '';
+    const str = String(value).trim();
+    return str.length > maxLen ? str.slice(0, maxLen) : str;
+}
+
+const VALID_EQUIPMENT_RESULTS = new Set([
+    'eq_none',
+    'eq_knee_sleeves',
+    'eq_knee_sleeves_belt',
+    'eq_wraps',
+    'eq_wraps_belt'
+]);
+
+const LEGACY_RESULT_MAP = {
+    planned: 'eq_none',
+    done: 'eq_none',
+    miss: 'eq_none',
+    skip: 'eq_none'
+};
+
+function asDateOnlyString(value) {
+    if (!value) return '';
+    const str = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+    const d = new Date(str);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toISOString().slice(0, 10);
+}
+
+function normalizeAttemptNode(node = {}) {
+    const rawResult = asString(node?.result, 40).toLowerCase();
+    const mappedLegacy = LEGACY_RESULT_MAP[rawResult];
+    const normalizedResult = mappedLegacy || rawResult;
+    const validResult = VALID_EQUIPMENT_RESULTS.has(normalizedResult) ? normalizedResult : 'eq_none';
+    return {
+        weight: asString(node?.weight, 60),
+        result: validResult,
+        note: asString(node?.note, 500)
+    };
+}
+
+function normalizeLiftNode(node = {}) {
+    return {
+        open: normalizeAttemptNode(node?.open),
+        second: normalizeAttemptNode(node?.second),
+        third: normalizeAttemptNode(node?.third),
+        notes: asString(node?.notes, 1000)
+    };
+}
+
+function normalizeOpenersPlan(plan = {}) {
+    const now = new Date().toISOString();
+    const incomingId = asString(plan?.id || plan?._id, 80);
+    return {
+        id: incomingId || new ObjectId().toString(),
+        meetName: asString(plan?.meetName, 160),
+        meetDate: asDateOnlyString(plan?.meetDate),
+        notes: asString(plan?.notes, 2000),
+        lifts: {
+            squat: normalizeLiftNode(plan?.lifts?.squat),
+            bench: normalizeLiftNode(plan?.lifts?.bench),
+            deadlift: normalizeLiftNode(plan?.lifts?.deadlift)
+        },
+        source_template_id: asString(plan?.source_template_id, 80),
+        source_template_name: asString(plan?.source_template_name, 160),
+        created_at: plan?.created_at || now,
+        updated_at: now
+    };
+}
+
+function normalizeOpenersTemplate(template = {}) {
+    const now = new Date().toISOString();
+    const incomingId = asString(template?.id || template?._id, 80);
+    const basePlan = template?.basePlan && typeof template.basePlan === 'object'
+        ? template.basePlan
+        : (template?.plan && typeof template.plan === 'object' ? template.plan : template);
+
+    return {
+        id: incomingId || new ObjectId().toString(),
+        name: asString(template?.name || template?.templateName, 160),
+        description: asString(template?.description, 600),
+        basePlan: normalizeOpenersPlan(basePlan),
+        created_at: template?.created_at || now,
+        updated_at: now
+    };
+}
+
+function normalizeUserDetailsPayload(details = {}) {
+    const out = { ...(details || {}) };
+
+    if (Object.prototype.hasOwnProperty.call(out, 'competition_openers_plans')) {
+        const rawPlans = Array.isArray(out.competition_openers_plans) ? out.competition_openers_plans : [];
+        out.competition_openers_plans = rawPlans.map((plan) => normalizeOpenersPlan(plan));
+    }
+
+    if (Object.prototype.hasOwnProperty.call(out, 'competition_openers_templates')) {
+        const rawTemplates = Array.isArray(out.competition_openers_templates) ? out.competition_openers_templates : [];
+        out.competition_openers_templates = rawTemplates.map((tpl) => normalizeOpenersTemplate(tpl));
+    }
+
+    return out;
+}
+
+function asObjectIdOrThrow(id, fieldName = 'id') {
+    try {
+        return new ObjectId(id);
+    } catch (error) {
+        throw new Error(`${fieldName} invalido: ${id}`);
+    }
+}
+
+async function getOpenersTemplatesByCoach(coachId) {
+    await client.connect();
+    const coachObjectId = asObjectIdOrThrow(coachId, 'coachId');
+    const profile = await userProfile.findOne(
+        { user_id: coachObjectId },
+        { projection: { competition_openers_templates: 1 } }
+    );
+    const templates = Array.isArray(profile?.competition_openers_templates)
+        ? profile.competition_openers_templates
+        : [];
+    return templates.map((tpl) => normalizeOpenersTemplate(tpl));
+}
+
+async function saveOpenersTemplatesByCoach(coachId, templates = []) {
+    const safeTemplates = Array.isArray(templates) ? templates : [];
+    const normalizedTemplates = safeTemplates.map((tpl) => normalizeOpenersTemplate(tpl));
+    const { profile } = await upsertUserDetails(coachId, {
+        competition_openers_templates: normalizedTemplates
+    });
+    const storedTemplates = Array.isArray(profile?.competition_openers_templates)
+        ? profile.competition_openers_templates
+        : normalizedTemplates;
+    return storedTemplates.map((tpl) => normalizeOpenersTemplate(tpl));
+}
+
+async function getOpenersPlansByUser(userId) {
+    await client.connect();
+    const userObjectId = asObjectIdOrThrow(userId, 'userId');
+    const profile = await userProfile.findOne(
+        { user_id: userObjectId },
+        { projection: { competition_openers_plans: 1 } }
+    );
+    const plans = Array.isArray(profile?.competition_openers_plans)
+        ? profile.competition_openers_plans
+        : [];
+    return plans.map((plan) => normalizeOpenersPlan(plan));
+}
+
+async function saveOpenersPlansByUser(userId, plans = []) {
+    const safePlans = Array.isArray(plans) ? plans : [];
+    const normalizedPlans = safePlans.map((plan) => normalizeOpenersPlan(plan));
+    const { profile } = await upsertUserDetails(userId, {
+        competition_openers_plans: normalizedPlans
+    });
+    const storedPlans = Array.isArray(profile?.competition_openers_plans)
+        ? profile.competition_openers_plans
+        : normalizedPlans;
+    return storedPlans.map((plan) => normalizeOpenersPlan(plan));
+}
+
+async function closeUsersServiceConnectionForTests() {
+    try {
+        await client.close();
+    } catch (error) {
+        // noop
+    }
+}
+
+// Intenta encontrar UNA rutina de un usuario probando multiples campos/tipos.
 // Devuelve { matchedBy, doc } o null.
 async function debugFindOneRoutineForUser(routineCol, uid) {
   const uidObj = new ObjectId(uid);
@@ -102,14 +273,14 @@ async function debugFindOneRoutineForUser(routineCol, uid) {
   return null;
 }
 
-// ===== Función principal =====
+// ===== Funcion principal =====
 
 async function getUsersByEntrenadorIdWithLastWeek(entrenador_id, opts = {}) {
   const debug = !!opts.debug;
 
   return client.connect().then(async function () {
     const usersCol = users;            // ya definido arriba
-    const routineCol = routine;        // A S E G Ú R A T E: const routine = db.collection('Routine')
+    const routineCol = routine;        // A S E G U R A T E: const routine = db.collection('Routine')
 
     if (debug) {
       console.log('----- DEBUG withLastWeek START -----');
@@ -163,7 +334,7 @@ async function getUsersByEntrenadorIdWithLastWeek(entrenador_id, opts = {}) {
         }
       },
 
-      // Join con la colección correcta: "Routine"
+      // Join con la coleccion correcta: "Routine"
       {
         $lookup: {
           from: 'Routine',             // 👈 nombre real
@@ -324,7 +495,7 @@ async function getUsersByEntrenadorIdWithLastWeek(entrenador_id, opts = {}) {
         
       },
 
-      // A nivel usuario: tomamos el primer (y único) elemento del array
+      // A nivel usuario: tomamos el primer (y unico) elemento del array
       {
         $addFields: {
           last_week_created_at: { $ifNull: [ { $arrayElemAt: [ "$lastWeek.created_at", 0 ] }, null ] },
@@ -360,7 +531,7 @@ async function login(userLogin) {
     const isMatch = await bcrypt.compare(userLogin.password, user.password)
 
     if (!isMatch) {
-        throw new Error('Contraseña incorrecta')
+        throw new Error('Contrasena incorrecta')
     }
 
     return user
@@ -438,8 +609,9 @@ async function addUserProperty(userId, category) {
 
 async function upsertUserDetails(userId, details) {
     const timestamp = new Date().getTime();
+    const normalizedDetails = normalizeUserDetailsPayload(details);
     const newDetails = {
-        ...details,
+        ...normalizedDetails,
         last_edit: getDate(),
         timestamp: timestamp
     };
@@ -448,7 +620,7 @@ async function upsertUserDetails(userId, details) {
     try {
         convertedUserId = new ObjectId(userId);
     } catch (error) {
-        throw new Error(`El userId proporcionado no es válido: ${userId}`);
+        throw new Error(`El userId proporcionado no es valido: ${userId}`);
     }
 
     try {
@@ -469,18 +641,18 @@ async function upsertUserDetails(userId, details) {
                 profile: await userProfile.findOne({ _id: existingProfile._id })
             };
         } else {
-            // Armado explícito del nuevo perfil
+            // Armado explicito del nuevo perfil
             const newProfile = {
                 user_id: convertedUserId,
                 ...newDetails
             };
 
-            // Validación defensiva
+            // Validacion defensiva
             if (!newProfile.user_id || typeof newProfile.user_id !== 'object') {
-                throw new Error('Error al crear perfil: user_id no es válido o está ausente.');
+                throw new Error('Error al crear perfil: user_id no es valido o esta ausente.');
             }
 
-            // Inserción del nuevo documento
+            // Insercion del nuevo documento
             const insertResult = await userProfile.insertOne(newProfile);
 
             return {
@@ -498,7 +670,7 @@ async function findProfileByID(id) {
     try {
         convertedUserId = new ObjectId(id);
     } catch (error) {
-        throw new Error(`El userId proporcionado no es válido: ${id}`);
+        throw new Error(`El userId proporcionado no es valido: ${id}`);
     }
 
     try {
@@ -510,7 +682,7 @@ async function findProfileByID(id) {
         ]);
 
         if (!user) {
-            throw new Error(`No se encontró el usuario con id: ${id}`);
+            throw new Error(`No se encontro el usuario con id: ${id}`);
         }
 
         if (profile) {
@@ -581,12 +753,12 @@ async function getAnnouncementsByCreator(creatorId) {
 async function editAnnouncement(announcementId, updates) {
     await client.connect();
 
-    // Validación defensiva del ID
+    // Validacion defensiva del ID
     let idToEdit;
     try {
         idToEdit = new ObjectId(announcementId);
     } catch (err) {
-        throw new Error("ID de anuncio inválido");
+        throw new Error("ID de anuncio invalido");
     }
 
     // Convertir target_users
@@ -595,7 +767,7 @@ async function editAnnouncement(announcementId, updates) {
             try {
                 return new ObjectId(uid);
             } catch (err) {
-                console.error("ID inválido en target_users:", uid);
+                console.error("ID invalido en target_users:", uid);
                 return null;
             }
         }).filter(Boolean); // elimina los nulos
@@ -606,7 +778,7 @@ async function editAnnouncement(announcementId, updates) {
         try {
             updates.creator_id = new ObjectId(updates.creator_id);
         } catch (err) {
-            console.warn("creator_id inválido:", updates.creator_id);
+            console.warn("creator_id invalido:", updates.creator_id);
             updates.creator_id = null;
         }
     }
@@ -623,7 +795,7 @@ async function editAnnouncement(announcementId, updates) {
         updates.link_urls = updates.link_urls.map(url => String(url).trim()).filter(Boolean);
     }
 
-    // Normalización de modo
+    // Normalizacion de modo
     updates.mode = updates.mode || 'once';
     if (updates.mode === 'once') {
         updates.repeat_day = null;
@@ -701,8 +873,17 @@ async function getAnnouncementsForUser(userId, category) {
     if (modo === 'once') {
       const showDate = new Date(anuncio.show_at_date);
       if (now >= showDate) {
-        // Se muestra si no fue leído el mismo día o después
-        return !fueLeidoEn(logDate => logDate >= showDate);
+        // Compatibilidad: historicamente algunos read_log guardaron solo YYYY-MM-DD.
+        // Eso cae a medianoche y podia dejar el anuncio "no leido" aunque ya se hubiese visto.
+        return !fueLeidoEn(logDate => {
+          if (Number.isNaN(logDate.getTime())) return false;
+          const sameUtcDay =
+            logDate.getUTCFullYear() === showDate.getUTCFullYear() &&
+            logDate.getUTCMonth() === showDate.getUTCMonth() &&
+            logDate.getUTCDate() === showDate.getUTCDate();
+
+          return logDate >= showDate || sameUtcDay;
+        });
       }
       return false;
     }
@@ -737,7 +918,7 @@ async function getAnnouncementsForUser(userId, category) {
 async function markAnnouncementAsRead(announcementId, userId) {
     await client.connect();
 
-    const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+    const readAt = new Date();
 
     return announcements.updateOne(
         { _id: new ObjectId(announcementId) },
@@ -745,7 +926,7 @@ async function markAnnouncementAsRead(announcementId, userId) {
             $addToSet: {
                 read_log: {
                     user_id: new ObjectId(userId),
-                    date: today
+                    date: readAt
                 },
                 read_by: new ObjectId(userId)
             }
@@ -753,7 +934,7 @@ async function markAnnouncementAsRead(announcementId, userId) {
     );
 }
 
-// Auditoría: quién lo vio
+// Auditoria: quien lo vio
 async function getAnnouncementViews(announcementId) {
     await client.connect();
     const doc = await announcements.findOne({ _id: new ObjectId(announcementId) });
@@ -851,7 +1032,7 @@ async function updateUserPaymentInfo(userId, paymentInfo) {
   try {
     await client.connect();
 
-    // Validación defensiva
+    // Validacion defensiva
     if (typeof paymentInfo !== 'object') {
       throw new Error('paymentInfo debe ser un objeto');
     }
@@ -871,6 +1052,367 @@ async function updateUserPaymentInfo(userId, paymentInfo) {
   }
 }
 
+function ledgerDocBase(ownerId) {
+  return {
+    user_id: new ObjectId(ownerId),
+    createdAt: new Date(),   // ← solo metadatos
+  };
+}
+
+async function getOrCreateLedgerDoc(ownerId) {
+  await ensureConn();
+  const col = financeCol();
+  const owner = new ObjectId(ownerId);
+  const now = new Date();
+
+  const r = await col.findOneAndUpdate(
+    { user_id: owner },
+    {
+      $setOnInsert: ledgerDocBase(ownerId), // ya NO trae 'updatedAt' ni arrays
+      $set: { updatedAt: now }
+    },
+    { upsert: true, returnDocument: 'after' }
+  );
+  return r.value;
+}
+
+
+// Para generar subdocs con _id propio (arrays)
+function subdocBase(fields = {}) {
+  const now = new Date();
+  return {
+    _id: new ObjectId(),
+    createdAt: now,
+    updatedAt: now,
+    ...fields,
+  };
+}
+
+function applyDateFilter(arr, from, to) {
+  const f = dateOrNull(from), t = dateOrNull(to);
+  if (!f && !t) return arr;
+  return arr.filter(x => {
+    const d = dateOrNull(x?.fecha);
+    if (!d) return false;
+    if (f && d < f) return false;
+    if (t && d > t) return false;
+    return true;
+  });
+}
+
+function sortByFechaAndId(arr, sort = 'desc') {
+  const dir = sortDir(sort); // 1 asc / -1 desc
+  return arr.slice().sort((a, b) => {
+    const da = dateOrNull(a?.fecha)?.getTime() ?? 0;
+    const db = dateOrNull(b?.fecha)?.getTime() ?? 0;
+    if (da !== db) return dir * (da - db);
+    // desempate por _id
+    return dir * (String(a._id).localeCompare(String(b._id)));
+  });
+}
+
+// Helpers
+async function ensureConn() {
+  if (!client.topology?.isConnected?.()) await client.connect();
+}
+function financeCol() { return finance; }  // 👈 ahora explicito
+function clampLimit(n) { const v = Math.max(1, Number(n)||20); return Math.min(v, 500); }
+function sortDir(s) { return String(s).toLowerCase() === 'asc' ? 1 : -1; }
+function dateOrNull(s) { if (!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
+function dateOrNow(s) { const d = dateOrNull(s); return d || new Date(); }
+function numOrThrow(n) { const v = Number(n); if (!Number.isFinite(v) || v <= 0) throw new Error('monto invalido'); return v; }
+
+const EXPENSE_CATS = new Set(['Proveedor','Alquiler','Servicios','Impuestos','Insumos','Mantenimiento','Otro']);
+const VALID_KIND = new Set(['expense','cashflow','extrasale']);
+
+// Canonical doc shape (1 doc por movimiento)
+function newDocBase(userId, kind, fields) {
+  return {
+    user_id: new ObjectId(userId),
+    kind, // 'expense' | 'cashflow' | 'extrasale'
+    ...fields,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
+// ====== Lecturas ======
+
+export async function getLedgerGrouped(ownerId, { from, to, limit = 200, sort = 'desc' } = {}) {
+  if (!ownerId) throw new Error('param ownerId requerido');
+  const doc = await getOrCreateLedgerDoc(ownerId);
+
+  const lim = clampLimit(limit);
+
+  const expenses = sortByFechaAndId(applyDateFilter(doc.expenses || [], from, to), sort).slice(0, lim);
+  const cashflows = sortByFechaAndId(applyDateFilter(doc.cashflows || [], from, to), sort).slice(0, lim);
+  const extraSales = sortByFechaAndId(applyDateFilter(doc.extraSales || [], from, to), sort).slice(0, lim);
+
+  return { expenses, cashflows, extraSales };
+}
+
+
+export async function listItems(ownerId, { tipo, from, to, page = 1, limit = 20, sort = 'desc' } = {}) {
+  if (!ownerId) throw new Error('param ownerId requerido');
+  const doc = await getOrCreateLedgerDoc(ownerId);
+
+  const p = Math.max(1, Number(page) || 1);
+  const l = clampLimit(limit);
+
+  // Unificamos arrays con "kind" explicito y normalizamos cashflow tipo
+  const E = (doc.expenses || []).map(x => ({ ...x, kind: 'expense' }));
+  const C = (doc.cashflows || []).map(x => ({ ...x, kind: 'cashflow', tipo: x.tipo || x.cashflow_tipo })); // espejo 'tipo'
+  const S = (doc.extraSales || []).map(x => ({ ...x, kind: 'extrasale' }));
+
+  let all = [...E, ...C, ...S];
+
+  if (tipo) {
+    const k = String(tipo).toLowerCase();
+    if (!VALID_KIND.has(k)) throw new Error('param tipo invalido');
+    all = all.filter(x => x.kind === k);
+  }
+
+  all = applyDateFilter(all, from, to);
+  all = sortByFechaAndId(all, sort);
+
+  const total = all.length;
+  const start = (p - 1) * l;
+  const items = all.slice(start, start + l);
+
+  return { items, page: p, limit: l, total };
+}
+
+
+export async function getSummary(ownerId, { from, to } = {}) {
+  if (!ownerId) throw new Error('param ownerId requerido');
+  const doc = await getOrCreateLedgerDoc(ownerId);
+
+  const expenses   = applyDateFilter(doc.expenses   || [], from, to);
+  const cashflows  = applyDateFilter(doc.cashflows  || [], from, to);
+  const extraSales = applyDateFilter(doc.extraSales || [], from, to);
+
+  let ingresos = 0, retiros = 0, gastos = 0;
+
+  for (const e of expenses) gastos += Number(e.monto) || 0;
+
+  // sumar ingresos de cashflows
+  for (const c of cashflows) {
+    const T = (c.tipo || c.cashflow_tipo || '').toUpperCase();
+    if (T === 'INGRESO') ingresos += Number(c.monto) || 0;
+    else if (T === 'RETIRO') retiros += Number(c.monto) || 0;
+  }
+
+  // sumar ventas como ingresos
+  for (const s of extraSales) ingresos += Number(s.monto) || 0;
+
+  return { ingresos, retiros, gastos, saldo: ingresos - retiros - gastos };
+}
+
+
+// ====== Altas ======
+
+export async function createExpense(ownerId, { categoria, nombre, monto, descripcion, fecha }) {
+  if (!ownerId) throw new Error('param ownerId requerido');
+  if (!categoria || !EXPENSE_CATS.has(String(categoria))) throw new Error('categoria invalida');
+  if (!nombre) throw new Error('falta nombre');
+
+  await ensureConn();
+  const col = financeCol();
+
+  const item = subdocBase({
+    categoria: String(categoria),
+    nombre: String(nombre),
+    monto: numOrThrow(monto),
+    descripcion: descripcion ? String(descripcion) : '',
+    fecha: dateOrNow(fecha)
+  });
+
+  const now = new Date();
+  await col.updateOne(
+    { user_id: new ObjectId(ownerId) },
+    {
+      // 👇 SOLO metadatos en el upsert. NO arrays aca.
+      $setOnInsert: { user_id: new ObjectId(ownerId), createdAt: now },
+      $push: { expenses: item },   // el array se crea si no existe
+      $set: { updatedAt: now }
+    },
+    { upsert: true }
+  );
+
+  return item;
+}
+
+
+
+export async function createCashflow(ownerId, { tipo, concepto, monto, descripcion, fecha }) {
+  if (!ownerId) throw new Error('param ownerId requerido');
+  const T = String(tipo).toUpperCase();
+  if (T !== 'INGRESO' && T !== 'RETIRO') throw new Error('tipo invalido');
+  if (!concepto) throw new Error('falta concepto');
+
+  await ensureConn();
+  const col = financeCol();
+  const item = subdocBase({
+    // Guardamos ambas por compatibilidad con el front:
+    tipo: T,
+    cashflow_tipo: T,
+    concepto: String(concepto),
+    monto: numOrThrow(monto),
+    descripcion: descripcion ? String(descripcion) : '',
+    fecha: dateOrNow(fecha)
+  });
+
+const now = new Date();
+await col.updateOne(
+  { user_id: new ObjectId(ownerId) },
+  {
+    $setOnInsert: { user_id: new ObjectId(ownerId), createdAt: now }, // 🔸 SIN 'cashflows'
+    $push: { cashflows: item },
+    $set: { updatedAt: now }
+  },
+  { upsert: true }
+);
+
+  return item;
+}
+
+
+export async function createExtraSale(ownerId, { nombre, monto, fecha }) {
+  if (!ownerId) throw new Error('param ownerId requerido');
+  if (!nombre) throw new Error('falta nombre');
+
+  await ensureConn();
+  const col = financeCol();
+
+  const when = dateOrNow(fecha);
+  const amount = numOrThrow(monto);
+
+  const sale = subdocBase({
+    nombre: String(nombre),
+    monto: amount,
+    fecha: when
+  });
+
+  const now = new Date();
+  await col.updateOne(
+    { user_id: new ObjectId(ownerId) },
+    {
+      $setOnInsert: { user_id: new ObjectId(ownerId), createdAt: now }, // 👈 solo metadatos
+      $push: { extraSales: sale },                                       // 👈 sin mirror
+      $set: { updatedAt: now }
+    },
+    { upsert: true }
+  );
+
+  return sale; // 👈 solo sale
+}
+
+
+
+
+// ====== Edicion ======
+
+export async function updateItem(ownerId, itemId, patch) {
+  if (!ownerId) throw new Error('param ownerId requerido');
+  let _id; try { _id = new ObjectId(itemId); } catch { throw new Error('param itemId invalido'); }
+
+  await ensureConn();
+  const col = financeCol();
+  const owner = new ObjectId(ownerId);
+  const now = new Date();
+
+  // Intentamos en cada array; validamos segun el array detectado
+  // EXPENSES
+  let current = await col.findOne({ user_id: owner, 'expenses._id': _id }, { projection: { 'expenses.$': 1 } });
+  if (current?.expenses?.length) {
+    const set = { 'expenses.$[e].updatedAt': now };
+    if (patch.fecha) set['expenses.$[e].fecha'] = dateOrNow(patch.fecha);
+    if (patch.monto != null) set['expenses.$[e].monto'] = numOrThrow(patch.monto);
+    if (patch.descripcion != null) set['expenses.$[e].descripcion'] = String(patch.descripcion);
+    if (patch.categoria) {
+      if (!EXPENSE_CATS.has(String(patch.categoria))) throw new Error('categoria invalida');
+      set['expenses.$[e].categoria'] = String(patch.categoria);
+    }
+    if (patch.nombre) set['expenses.$[e].nombre'] = String(patch.nombre);
+
+    const r = await col.findOneAndUpdate(
+      { user_id: owner, 'expenses._id': _id },
+      { $set: { ...set, updatedAt: now } },
+      { arrayFilters: [{ 'e._id': _id }], returnDocument: 'after' }
+    );
+    const updated = (r.value?.expenses || []).find(x => String(x._id) === String(_id));
+    return updated || null;
+  }
+
+  // CASHFLOWS
+  current = await col.findOne({ user_id: owner, 'cashflows._id': _id }, { projection: { 'cashflows.$': 1 } });
+  if (current?.cashflows?.length) {
+    const set = { 'cashflows.$[c].updatedAt': now };
+    if (patch.fecha) set['cashflows.$[c].fecha'] = dateOrNow(patch.fecha);
+    if (patch.monto != null) set['cashflows.$[c].monto'] = numOrThrow(patch.monto);
+    if (patch.descripcion != null) set['cashflows.$[c].descripcion'] = String(patch.descripcion);
+    if (patch.tipo) {
+      const T = String(patch.tipo).toUpperCase();
+      if (T !== 'INGRESO' && T !== 'RETIRO') throw new Error('tipo invalido');
+      set['cashflows.$[c].tipo'] = T;
+      set['cashflows.$[c].cashflow_tipo'] = T; // espejo
+    }
+    if (patch.concepto) set['cashflows.$[c].concepto'] = String(patch.concepto);
+
+    const r = await col.findOneAndUpdate(
+      { user_id: owner, 'cashflows._id': _id },
+      { $set: { ...set, updatedAt: now } },
+      { arrayFilters: [{ 'c._id': _id }], returnDocument: 'after' }
+    );
+    const updated = (r.value?.cashflows || []).find(x => String(x._id) === String(_id));
+    return updated || null;
+  }
+
+  // EXTRASALES
+  current = await col.findOne({ user_id: owner, 'extraSales._id': _id }, { projection: { 'extraSales.$': 1 } });
+  if (current?.extraSales?.length) {
+    const set = { 'extraSales.$[s].updatedAt': now };
+    if (patch.fecha) set['extraSales.$[s].fecha'] = dateOrNow(patch.fecha);
+    if (patch.monto != null) set['extraSales.$[s].monto'] = numOrThrow(patch.monto);
+    if (patch.nombre) set['extraSales.$[s].nombre'] = String(patch.nombre);
+    if (patch.descripcion != null) set['extraSales.$[s].descripcion'] = String(patch.descripcion);
+
+    const r = await col.findOneAndUpdate(
+      { user_id: owner, 'extraSales._id': _id },
+      { $set: { ...set, updatedAt: now } },
+      { arrayFilters: [{ 's._id': _id }], returnDocument: 'after' }
+    );
+    const updated = (r.value?.extraSales || []).find(x => String(x._id) === String(_id));
+    return updated || null;
+  }
+
+  return null;
+}
+
+
+// ====== Borrado ======
+
+export async function deleteItem(ownerId, itemId) {
+  if (!ownerId) throw new Error('param ownerId requerido');
+  let _id; try { _id = new ObjectId(itemId); } catch { throw new Error('param itemId invalido'); }
+
+  await ensureConn();
+  const col = financeCol();
+  const owner = new ObjectId(ownerId);
+  const r = await col.updateOne(
+    { user_id: owner },
+    {
+      $pull: {
+        expenses: { _id },
+        cashflows: { _id },
+        extraSales: { _id }
+      },
+      $set: { updatedAt: new Date() }
+    }
+  );
+  return r.modifiedCount > 0;
+}
+
 
 
 export {
@@ -884,6 +1426,11 @@ export {
     addUserProperty,
     findProfileByID,
     upsertUserDetails,
+    getOpenersTemplatesByCoach,
+    saveOpenersTemplatesByCoach,
+    getOpenersPlansByUser,
+    saveOpenersPlansByUser,
+    closeUsersServiceConnectionForTests,
 
     createAnnouncement,
     getAnnouncementsForUser,

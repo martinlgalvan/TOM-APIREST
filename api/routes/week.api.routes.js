@@ -21,7 +21,7 @@ router.route('/api/week/:week_id')
 
 router.get('/api/weeks/last-created', [isLogin], RoutineController.getLastWeeksByUserIds);
 
-// ✅ NUEVO: actualización genérica de propiedades simples de la semana
+// ✅ NUEVO: actualizacion generica de propiedades simples de la semana
 router.route('/api/week/:week_id/properties')
     .patch([isLogin, isAdmin], RoutineController.updateWeekProperties)
  

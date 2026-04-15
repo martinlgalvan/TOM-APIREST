@@ -9,6 +9,10 @@ import * as PARservices from '../../services/PAR.services.js'
 
 //HELPERS 
 
+function getJwtSecret() {
+  return process.env.JWT_SECRET || 'toq_';
+}
+
 // Clon profundo seguro (sin JSON.stringify para no romper ObjectId)
 function deepClone(obj) {
   if (obj === null || typeof obj !== 'object') return obj;
@@ -30,7 +34,7 @@ function remapWeekIds(week) {
   // opcional: normalizar visibilidad en clones
   out.visibility = 'visible';
 
-  // días
+  // dias
   out.routine = (out.routine || []).map((day, dayIdx) => {
     const d = deepClone(day);
     d._id = new ObjectId();
@@ -44,7 +48,7 @@ function remapWeekIds(week) {
       }));
     }
 
-    // movility (ojo al nombre que usás en DB)
+    // movility (ojo al nombre que usas en DB)
     if (Array.isArray(d.movility)) {
       d.movility = d.movility.map(m => ({
         ...deepClone(m),
@@ -69,7 +73,7 @@ function remapWeekIds(week) {
   return out;
 }
 
-// Normaliza y regenera IDs según el tipo de estructura
+// Normaliza y regenera IDs segun el tipo de estructura
 function remapExerciseLike(node) {
   const n = deepClone(node);
 
@@ -93,14 +97,14 @@ function remapExerciseLike(node) {
     return n;
   }
 
-  // Circuito a nivel raíz o dentro de bloque (tu código no usa 'type' fijo aquí)
+  // Circuito a nivel raiz o dentro de bloque (tu codigo no usa 'type' fijo aqui)
   if (Array.isArray(n.circuit)) {
-    // Circuito “header”
-    n.exercise_id = new ObjectId();          // para identificar el objeto-circuito en sí
+    // Circuito "header"
+    n.exercise_id = new ObjectId();          // para identificar el objeto-circuito en si
     n.numberExercise = n.numberExercise ?? 0;
     n.circuit = n.circuit.map(item => ({
       ...deepClone(item),
-      // Ítems del circuito no tienen exercise_id propio; mantené un idRefresh único
+      // Items del circuito no tienen exercise_id propio; mantene un idRefresh unico
       idRefresh: (item && item.idRefresh) ? item.idRefresh : new ObjectId().toString(),
     }));
     return n;
@@ -111,7 +115,7 @@ function remapExerciseLike(node) {
   return n;
 }
 
-// Verifica que no existan exercise_id duplicados por día
+// Verifica que no existan exercise_id duplicados por dia
 function assertNoDuplicateExerciseIdsByDay(week) {
   for (const day of (week.routine || [])) {
     const ids = new Set();
@@ -120,13 +124,14 @@ function assertNoDuplicateExerciseIdsByDay(week) {
     }
   }
 }
+
 function collectExerciseIds(node, idsSet) {
   if (!node || typeof node !== 'object') return;
 
   if (node.type === 'exercise') {
     const idStr = String(node.exercise_id);
     if (idsSet.has(idStr)) {
-      const err = new Error(`exercise_id duplicado en el mismo día: ${idStr}`);
+      const err = new Error(`exercise_id duplicado en el mismo dia: ${idStr}`);
       err.status = 400;
       throw err;
     }
@@ -140,20 +145,63 @@ function collectExerciseIds(node, idsSet) {
   }
 
   if (Array.isArray(node.circuit)) {
-    // El “circuito” tiene exercise_id propio (encabezado del circuito)
+    // El "circuito" tiene exercise_id propio (encabezado del circuito)
     if (node.exercise_id) {
       const idStr = String(node.exercise_id);
       if (idsSet.has(idStr)) {
-        const err = new Error(`exercise_id duplicado (circuito) en el mismo día: ${idStr}`);
+        const err = new Error(`exercise_id duplicado (circuito) en el mismo dia: ${idStr}`);
         err.status = 400;
         throw err;
       }
       idsSet.add(idStr);
     }
-    // Ítems del circuito NO suman exercise_id (tienen idRefresh)
+    // Items del circuito NO suman exercise_id (tienen idRefresh)
     return;
   }
 }
+
+const toPlainId = (value) => {
+  if (value == null) return value;
+  if (typeof value === 'string') return value;
+  if (value instanceof ObjectId) return value.toString();
+  if (typeof value === 'object' && '$oid' in value) return value.$oid;
+  return value.toString ? value.toString() : value;
+};
+
+const serializeExercise = (exercise = {}) => {
+  const base = { ...exercise, exercise_id: toPlainId(exercise.exercise_id) };
+
+  if (exercise.type === 'block') {
+    base.block_id = toPlainId(exercise.block_id);
+    base.exercises = (exercise.exercises || []).map(serializeExercise);
+    return base;
+  }
+
+  if (Array.isArray(exercise.circuit)) {
+    base.circuit = exercise.circuit.map(item => ({ ...item }));
+  }
+
+  return base;
+};
+
+const serializeDay = (day = {}) => ({
+  ...day,
+  _id: toPlainId(day._id),
+  exercises: (day.exercises || []).map(serializeExercise),
+  warmup: (day.warmup || []).map(w => ({ ...w, warmup_id: toPlainId(w.warmup_id) })),
+  movility: (day.movility || []).map(m => ({ ...m, movility_id: toPlainId(m.movility_id) }))
+});
+
+const serializeRoutineDoc = (doc = {}) => ({
+  ...doc,
+  _id: toPlainId(doc._id),
+  user_id: toPlainId(doc.user_id),
+  parent_par_id: toPlainId(doc.parent_par_id),
+  block_id: toPlainId(doc.block_id),
+  routine: (doc.routine || []).map(serializeDay)
+});
+
+const serializeMany = (docs = []) => docs.map(serializeRoutineDoc);
 
 
 // =================== LIST / FIND ===================
@@ -165,7 +213,7 @@ function findAll(req, res){
   }
   RoutineServices.getRoutine(filter)
       .then(function(week){
-          res.status(200).json(week)
+          res.status(200).json(serializeMany(week))
       })
 }
 
@@ -174,9 +222,9 @@ function findByWeekId(req, res){
   RoutineServices.getRoutineById(week_id)
       .then(function(day){
           if(day){
-              res.status(200).json(day)
+              res.status(200).json(serializeMany(day));
           } else{
-              res.status(404).json({message: "Día no encontrado."})
+              res.status(404).json({message: "Dia no encontrado."})
           }
       })
 }
@@ -185,7 +233,7 @@ function getLastWeeksByUserIds(req, res) {
   // ids=uid1,uid2,uid3
   const idsParam = (req.query.ids || '').trim();
   if (!idsParam) {
-    return res.status(400).json({ message: "Parámetro 'ids' requerido (separado por comas)." });
+    return res.status(400).json({ message: "Parametro 'ids' requerido (separado por comas)." });
   }
 
   const ids = idsParam.split(',').map(s => s.trim()).filter(Boolean);
@@ -194,12 +242,12 @@ function getLastWeeksByUserIds(req, res) {
   try {
     objectIds = ids.map(id => new ObjectId(id));
   } catch (e) {
-    return res.status(400).json({ message: "Alguno de los ids no es un ObjectId válido." });
+    return res.status(400).json({ message: "Alguno de los ids no es un ObjectId valido." });
   }
 
   RoutineServices.getLastWeekCreatedAtByUserIds(objectIds)
     .then(rows => res.status(200).json(rows)) // [{ user_id, created_at }]
-    .catch(err => res.status(500).json({ message: "Error al obtener últimas semanas.", error: err?.message }));
+    .catch(err => res.status(500).json({ message: "Error al obtener ultimas semanas.", error: err?.message }));
 }
 
 function findRoutineByUserId(req, res){
@@ -207,7 +255,7 @@ function findRoutineByUserId(req, res){
   RoutineServices.getRoutineByUserId(id)
       .then(function(day){
           if(day){
-              res.status(200).json(day)
+              res.status(200).json(serializeMany(day));
           } else{
               res.status(404).json({message: "Rutina no encontrada."})
           }
@@ -218,11 +266,11 @@ function findRoutineByUserId(req, res){
 
 function createWeek(req, res){
   const user_id = req.params.userId
-  const firstDay = "Día 1"
+  const firstDay = "Dia 1"
 
   const week = {
       name: req.body.name,
-      // si querés meter visibility por default:
+      // si queres meter visibility por default:
       visibility: req.body.visibility || 'visible',
       routine: [
           {name: firstDay,
@@ -233,7 +281,7 @@ function createWeek(req, res){
 
   RoutineServices.createWeek(week,user_id)
       .then(function(week){
-          res.status(201).json(week)
+          res.status(201).json(serializeRoutineDoc(week));
       })
 }
 
@@ -242,29 +290,29 @@ async function createClonLastWeek(req, res) {
     const user_id = req.params.userId;
     const { fecha } = req.body;
 
-    // Traemos la rutina actual (asumís orden DESC en servicio)
+    // Traemos la rutina actual (asumis orden DESC en servicio)
     const data = await RoutineServices.getRoutineByUserId(user_id);
     if (!data || !data.length) {
       return res.status(404).json({ message: 'El usuario no tiene semanas previas para clonar.' });
     }
 
-    // ¡No mutar! — clonar profundo y luego regenerar IDs
+    // !No mutar! - clonar profundo y luego regenerar IDs
     const lastWeek = data[0];
     let draft = remapWeekIds(lastWeek);
 
-    // Nombre según modo
+    // Nombre segun modo
     if (fecha === 'isDate') {
       draft.name = `Semana del ${new Date().toLocaleDateString()}`;
     } else {
       draft.name = `Semana ${data.length + 1}`;
     }
 
-    // Validación de integridad: no permitir exercise_id repetidos por día
+    // Validacion de integridad: no permitir exercise_id repetidos por dia
     assertNoDuplicateExerciseIdsByDay(draft);
 
     // Guardar
     const saved = await RoutineServices.createWeek(draft, user_id);
-    return res.status(201).json(saved);
+    return res.status(201).json(serializeRoutineDoc(saved));
   } catch (err) {
     console.error('Error en createClonLastWeek:', err);
     const status = err.status || 500;
@@ -279,12 +327,14 @@ async function editWeek(req, res) {
   const payload = req.body;
 
   try {
-    // ✅ CASO 1: Actualización tradicional (array = rutina semanal)
+    // ✅ CASO 1: Actualizacion tradicional (array = rutina semanal)
     if (Array.isArray(payload)) {
       await RoutineServices.editWeek(weekID, payload);
       const updated = await RoutineServices.getRoutineById(weekID);
       if (!updated) return res.status(404).json({ message: "Week not found." });
-      return res.status(200).json({ weekData: updated });
+      const serialized = Array.isArray(updated) ? serializeMany(updated) : serializeRoutineDoc(updated);
+      return res.status(200).json({ weekData: serialized });
+
     }
 
     // ✅ CASO 2: Actualizar bloque de UNA semana
@@ -301,11 +351,11 @@ async function editWeek(req, res) {
           return RoutineServices.updateBlockOfWeek(entry.week_id, entry.block);
         })
       );
-      return res.status(200).json({ message: 'Bloques múltiples actualizados', modified: updates.length });
+      return res.status(200).json({ message: 'Bloques multiples actualizados', modified: updates.length });
     }
 
-    // ❌ Payload inválido
-    return res.status(400).json({ message: "Formato de actualización no válido." });
+    // ❌ Payload invalido
+    return res.status(400).json({ message: "Formato de actualizacion no valido." });
 
   } catch (error) {
     console.error(error);
@@ -332,7 +382,7 @@ async function updateWeekProperties(req, res) {
       return acc;
     }, {});
 
-    // --- Normalización segura de comments (PRESERVA mode y days) ---
+    // --- Normalizacion segura de comments (PRESERVA mode y days) ---
     if ('comments' in partial) {
       partial.comments = normalizeComments(partial.comments);
     }
@@ -343,13 +393,13 @@ async function updateWeekProperties(req, res) {
     }
 
     if (!Object.keys(partial).length) {
-      return res.status(400).json({ message: 'Ninguna propiedad válida para actualizar.' });
+      return res.status(400).json({ message: 'Ninguna propiedad valida para actualizar.' });
     }
 
     await RoutineServices.updateWeekFields(weekID, partial, ALLOWED);
 
     const updated = await RoutineServices.getRoutineById(weekID);
-    return res.status(200).json({ message: 'Semana actualizada', week: updated?.[0] || null });
+    return res.status(200).json({ message: 'Semana actualizada', week: updated ? serializeRoutineDoc(updated[0] || updated) : null });
 
   } catch (error) {
     console.error(error);
@@ -360,7 +410,7 @@ async function updateWeekProperties(req, res) {
 /**
  * Normaliza comments aceptando:
  * - modo libre: { title?, description?, mode: "free" }
- * - modo días:  { title?, mode: "days", days: Array|Object, daysMap?: Object }
+ * - modo dias:  { title?, mode: "days", days: Array|Object, daysMap?: Object }
  * 
  * Soporta:
  * - days como array: [{dayId, text, label?}]
@@ -406,7 +456,7 @@ function normalizeComments(c) {
     }));
   }
 
-  // daysMap derivado (opcional, útil para lecturas rápidas)
+  // daysMap derivado (opcional, util para lecturas rapidas)
   const daysMap = daysArr.reduce((acc, it) => {
     acc[it.dayId] = it.text;
     return acc;
@@ -414,7 +464,7 @@ function normalizeComments(c) {
 
   return {
     title,
-    description, // por si querés usarla además del modo días
+    description, // por si queres usarla ademas del modo dias
     mode: 'days',
     days: daysArr,
     daysMap
@@ -436,7 +486,7 @@ function editWeekName(req, res){
       })
       .then(function(weekID) {
           if(weekID){
-              res.status(200).json({weekID})
+              res.status(200).json({ weekID: serializeMany(weekID) })
           } else {
               res.status(404).json({ message: "Ejercicio no encontrado."})
           }
@@ -456,7 +506,7 @@ function deleteWeek(req, res) {
       })
 }
 
-// =================== DAYS / EXERCISES / WARMUP (tal cual los tenías) ===================
+// =================== DAYS / EXERCISES / WARMUP (tal cual los tenias) ===================
 
 function createDay(req, res){
   const week_id = req.params.week_id
@@ -493,7 +543,7 @@ function deleteDay(req, res) {
   const day_id = req.params.day_id
   RoutineServices.deleteDay(week_id,day_id)
       .then(() => {
-          res.json({ message: 'Día eliminado' })
+          res.json({ message: 'Dia eliminado' })
       })
       .catch(err => {
           res.status(500).json({ message: err.message })
@@ -660,9 +710,9 @@ function getPAR(req, res){
   PARservices.getPAR(user_id)
       .then(function(user){
           if(user){
-              res.status(200).json(user)
+              res.status(200).json(serializeMany(user))
           } else{
-              res.status(404).json({message: "Día no encontrado."})
+              res.status(404).json({message: "Dia no encontrado."})
           }
       })
 }
@@ -703,7 +753,7 @@ function createPARweek(req, res){
   } 
   PARservices.createPAR(week,user_id)
       .then((data) => {
-          res.status(201).json(data)
+          res.status(201).json(serializeRoutineDoc(data))
       })
 }
 
@@ -722,7 +772,7 @@ function createPARweekInRoutine(req, res){
           } 
           RoutineServices.createWeek(week,user_id)
               .then((data) => {
-                  res.status(201).json(data)
+                  res.status(201).json(serializeRoutineDoc(data))
               })
       })
 } 
@@ -740,7 +790,7 @@ function createWeekForMany(req, res) {
 
   RoutineServices.createWeekForMany(week, userIds)
     .then((data) => {
-      res.status(201).json(data);
+      res.status(201).json(serializeMany(data));
     })
     .catch((err) => {
       res.status(500).json({ error: err.message });
@@ -760,7 +810,7 @@ function createPARforMultipleUsersController(req, res) {
 
   RoutineServices.createPARforMultipleUsers(week, user_ids)
     .then((data) => {
-      res.status(201).json(data);
+      res.status(201).json(serializeMany(data));
     })
     .catch((err) => {
       res.status(500).json({ error: err.message });
@@ -775,7 +825,7 @@ async function createProgressionForMultipleUsersController(req, res) {
   
   try {
     const newWeeks = await RoutineServices.createProgressionForMultipleUsers(template, user_ids);
-    res.status(201).json(newWeeks);
+    res.status(201).json(serializeMany(newWeeks));
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -785,7 +835,7 @@ async function createProgressionFromPARController(req, res) {
   const parId = req.params.par_id;
   try {
     const newPAR = await PARservices.createProgressionFromPAR(parId);
-    res.status(201).json(newPAR);
+    res.status(201).json(serializeRoutineDoc(newPAR));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -823,54 +873,70 @@ async function cloneBlock(req, res) {
 }
 
 async function generateUserQR(req, res) {
-    const { userId } = req.params; // ID del usuario al que se generará el QR
+  const { userId } = req.params;
 
-    try {
-        // Verifica si el usuario existe
-        const user = await UsersService.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: "Usuario no encontrado." });
-        }
-
-        // Genera un token único para el usuario
-        const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET); // Expira en 10 minutos
-
-        // Crea la URL del QR
-        const qrData = `https://planificaciontom.com/qr-login?token=${token}`;
-
-        // Genera la imagen del QR
-        const qrImage = await QRCode.toDataURL(qrData);
-
-        res.status(200).json({ qrImage, token });
-    } catch (error) {
-        res.status(500).json({ message: "Error al generar el QR.", error: error.message });
+  try {
+    const user = await UsersService.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
     }
+
+    const ACCESS_SECRET = getJwtSecret();
+
+    // ✅ Token QR corto + marcado + id string
+    const token = jwt.sign(
+      { id: user._id.toString(), purpose: 'qr' },
+      ACCESS_SECRET,
+      { expiresIn: '10m' }
+    );
+
+    // URL del QR (front)
+    const base = process.env.QR_LOGIN_URL || 'https://planificaciontom.com/qr-login';
+    const qrData = `${base}?token=${encodeURIComponent(token)}`;
+
+    const qrImage = await QRCode.toDataURL(qrData);
+
+    res.status(200).json({ qrImage, token });
+  } catch (error) {
+    res.status(500).json({ message: "Error al generar el QR.", error: error.message });
+  }
 }
 
-// Inicia sesión usando un token del QR
+// Inicia sesion usando un token del QR
 async function loginWithQR(req, res) {
-    const { token } = req.body;
+  const { token } = req.body;
 
-    try {
-        // Valida el token del QR
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const userId = decoded.id;
+  try {
+    const ACCESS_SECRET = getJwtSecret();
 
-        // Busca al usuario correspondiente
-        const user = await UsersService.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: "Usuario no encontrado." });
-        }
+    // ✅ Valida token QR
+    const decoded = jwt.verify(token, ACCESS_SECRET);
 
-        // Genera un nuevo token de sesión
-        const sessionToken = jwt.sign({ id: user._id, role: user.role }, process.env.SESSION_SECRET);
-
-        res.status(200).json({ jwt: sessionToken, user });
-    } catch (error) {
-        res.status(400).json({ message: "Token inválido o expirado.", error: error.message });
+    // ✅ Asegura que sea token QR
+    if (decoded?.purpose !== 'qr') {
+      return res.status(400).json({ message: "Token invalido (purpose)." });
     }
-}
 
+    const userId = String(decoded.id);
+
+    const user = await UsersService.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado." });
+    }
+
+    // ✅ Token de sesion (igual que login normal) + id string
+    const sessionToken = jwt.sign(
+      { id: user._id.toString(), role: user.role },
+      ACCESS_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    // ✅ Misma forma que /api/users/login
+    res.status(200).json({ token: sessionToken, user });
+  } catch (error) {
+    res.status(400).json({ message: "Token invalido o expirado.", error: error.message });
+  }
+}
 
 export {
   findAll,

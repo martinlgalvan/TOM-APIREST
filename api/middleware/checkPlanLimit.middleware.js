@@ -7,7 +7,7 @@ const plans = {
   Profesional: { maxUsers: 55},
   Elite: { maxUsers: 95},
   Empresarial: { maxUsers: 140},
-  Personalizado: { maxUsers: 500}, // Sin límite
+  Personalizado: { maxUsers: 500}, // Sin limite
 };
 
 async function checkPlanLimit(req, res, next) {
@@ -23,20 +23,20 @@ async function checkPlanLimit(req, res, next) {
     const planDetails = plans[adminPlan];
 
     if (!planDetails) {
-      return res.status(400).json({ message: 'El plan asignado al usuario no es válido.' });
+      return res.status(400).json({ message: 'El plan asignado al usuario no es valido.' });
     }
 
     const createdUsersCount = await userService.getUsersByEntrenadorId(adminId);
 
     if (createdUsersCount.length >= planDetails.maxUsers) {
       return res.status(403).json({
-        message: `Has alcanzado el límite de usuarios para el plan ${adminPlan}. Máximo permitido: ${planDetails.maxUsers}.`,
+        message: `Has alcanzado el limite de usuarios para el plan ${adminPlan}. Maximo permitido: ${planDetails.maxUsers}.`,
       });
     }
 
-    next(); // Si no se supera el límite, continúa con la creación
+    next(); // Si no se supera el limite, continua con la creacion
   } catch (error) {
-    console.error('Error en el middleware de límite de planes:', error);
+    console.error('Error en el middleware de limite de planes:', error);
     res.status(500).json({ message: 'Error interno del servidor.' });
   }
 }

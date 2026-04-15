@@ -32,8 +32,8 @@ function normalizeMovilityKeys(day) {
 }
 
 /**
- * Clona un documento PAR (semana) como progresión:
- * - Regenera _id de la semana y _id de cada día
+ * Clona un documento PAR (semana) como progresion:
+ * - Regenera _id de la semana y _id de cada dia
  * - Regenera exercise_id / warmup_id / movility_id
  * - Mantiene user_id como ObjectId
  * - Normaliza 'mobility' -> 'movility'
@@ -63,7 +63,7 @@ function clonePARForProgression(templateDoc) {
   // Limpiamos parent_par_id si viniese del template (lo seteamos afuera)
   delete clone.parent_par_id;
 
-  // Normalizamos/Clonamos días
+  // Normalizamos/Clonamos dias
   if (Array.isArray(clone.routine)) {
     clone.routine = clone.routine.map((day) => {
       const nd = normalizeMovilityKeys(day);
@@ -170,7 +170,7 @@ export async function deletePAR(id) {
   const filter = { _id: new ObjectId(id) };
   const result = await par.deleteOne(filter);
   if (result.deletedCount === 0) {
-    throw new Error('el PAR no fue encontrada o no se eliminó.');
+    throw new Error('el PAR no fue encontrada o no se elimino.');
   }
   return { message: 'PAR eliminada exitosamente' };
 }
@@ -180,7 +180,7 @@ export async function createProgressionFromPAR(parId) {
 
   const inputId = new ObjectId(parId);
 
-  // 1) Documento base (puede ser madre o una progresión)
+  // 1) Documento base (puede ser madre o una progresion)
   const doc = await par.findOne({ _id: inputId });
   if (!doc) {
     throw new Error('PAR no encontrado');
@@ -201,8 +201,8 @@ export async function createProgressionFromPAR(parId) {
     throw new Error('PAR madre no encontrada');
   }
 
-  // 3) Buscar última progresión del root (por timestamp desc) asdas
-  //    Incluimos compatibilidad por si parent_par_id quedó guardado como string.
+  // 3) Buscar ultima progresion del root (por timestamp desc) asdas
+  //    Incluimos compatibilidad por si parent_par_id quedo guardado como string.
   const lastProg = await par
     .find({
       $or: [
@@ -214,7 +214,7 @@ export async function createProgressionFromPAR(parId) {
     .limit(1)
     .next();
 
-  // 4) Plantilla: última progresión o la madre
+  // 4) Plantilla: ultima progresion o la madre
   const template = lastProg || rootPar;
 
   // 5) Contar progresiones existentes del root (ObjectId o string)
@@ -228,7 +228,7 @@ export async function createProgressionFromPAR(parId) {
   // 6) Clonar profundamente y regenerar IDs, normalizar movility
   const clone = clonePARForProgression(template);
 
-  // 7) Atributos de progresión
+  // 7) Atributos de progresion
   const now = new Date();
   clone.parent_par_id = rootId;
   clone.created_at = now; // Date
@@ -238,10 +238,10 @@ export async function createProgressionFromPAR(parId) {
   };
   clone.timestamp = now.getTime();
 
-  // Nombre base: usamos el nombre de la madre y le agregamos el número siguiente
-  // (por si la madre ya venía con sufijo de progresión).
-  const baseName = String(rootPar.name || '').replace(/\s*-\s*Progresión\s+\d+$/i, '');
-  clone.name = `${baseName} - Progresión ${existingCount + 1}`;
+  // Nombre base: usamos el nombre de la madre y le agregamos el numero siguiente
+  // (por si la madre ya venia con sufijo de progresion).
+  const baseName = String(rootPar.name || '').replace(/\s*-\s*Progresion\s+\d+$/i, '');
+  clone.name = `${baseName} - Progresion ${existingCount + 1}`;
 
   // 8) Insertar
   await par.insertOne(clone);

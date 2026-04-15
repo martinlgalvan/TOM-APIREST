@@ -33,7 +33,7 @@ async function getLastWeekCreatedAtByUserIds(userObjectIds){
     .then(function(){
       return routine.aggregate([
         { $match: { user_id: { $in: userObjectIds } } },
-        // Si created_at es Date, esto basta; si fuera string ISO, podés envolver con {$toDate:"$created_at"}.
+        // Si created_at es Date, esto basta; si fuera string ISO, podes envolver con {$toDate:"$created_at"}.
         { $group: { _id: "$user_id", created_at: { $max: "$created_at" } } },
         { $project: { _id: 0, user_id: "$_id", created_at: 1 } }
       ]).toArray();
@@ -94,7 +94,7 @@ async function createPARforMultipleUsers(PAR, user_ids) {
       return newPARs;
     })
     .catch((err) => {
-      throw new Error(`Error al crear PAR para múltiples usuarios: ${err.message}`);
+      throw new Error(`Error al crear PAR para multiples usuarios: ${err.message}`);
     });
 }
 
@@ -119,9 +119,9 @@ function keyOfName(nameField) {
 }
 
 // Obtiene una "clave estable" para matching por elemento.
-// Para ejercicios: numberExercise > nombre > índice
-// Para warmup: numberWarmup > nombre > índice
-// Para movility: numberMobility > nombre > índice
+// Para ejercicios: numberExercise > nombre > indice
+// Para warmup: numberWarmup > nombre > indice
+// Para movility: numberMobility > nombre > indice
 function keyOf(element, kind, fallbackIndex) {
   if (!element || typeof element !== 'object') return `__idx__${fallbackIndex}`;
   if (kind === 'exercise') {
@@ -141,7 +141,7 @@ function keyOf(element, kind, fallbackIndex) {
 }
 
 // Dado un elemento de template y una lista base del usuario,
-// intenta encontrar el índice del mejor match usando la clave estable.
+// intenta encontrar el indice del mejor match usando la clave estable.
 function matchIndex(templateEl, baseList, kind, fallbackIndex) {
   const tKey = keyOf(templateEl, kind, fallbackIndex);
   if (!Array.isArray(baseList) || !baseList.length) return -1;
@@ -155,15 +155,15 @@ function matchIndex(templateEl, baseList, kind, fallbackIndex) {
 
 /**
  * Sincroniza una lista (ejercicios/warmup/movility) **guiada por el template**,
- * mergeando campos "suaves" como ya hacías:
+ * mergeando campos "suaves" como ya hacias:
  * - Si un item existe en base (match por clave estable) se toma ese como base y se pisan campos con template usando mergeFields.
  * - Si no existe en base, se crea **nuevo** desde template.
- * - No se arrastran "sobrantes" de base que no estén en template (respeta eliminaciones).
+ * - No se arrastran "sobrantes" de base que no esten en template (respeta eliminaciones).
  *
  * @param {Array} templList lista del template (en orden final deseado)
- * @param {Array} baseList lista base del usuario (última semana)
+ * @param {Array} baseList lista base del usuario (ultima semana)
  * @param {'exercise'|'warmup'|'movility'} kind
- * @param {Function} applyMergeFn callback que recibe (baseItem, templItem) y hace los mergeFields específicos (tu lógica existente).
+ * @param {Function} applyMergeFn callback que recibe (baseItem, templItem) y hace los mergeFields especificos (tu logica existente).
  * @returns {Array} lista sincronizada
  */
 function syncByTemplateList(templList, baseList, kind, applyMergeFn) {
@@ -194,7 +194,7 @@ async function createProgressionForMultipleUsers(template, user_ids) {
   await client.connect();
   const newWeeks = [];
 
-  // Aseguramos routine del template; si no viene, queremos una semana sin días (respeta eliminación total)
+  // Aseguramos routine del template; si no viene, queremos una semana sin dias (respeta eliminacion total)
   const templRoutine = Array.isArray(template?.routine) ? template.routine : [];
 
   for (const userId of user_ids) {
@@ -202,7 +202,7 @@ async function createProgressionForMultipleUsers(template, user_ids) {
     const lastWeek = routines[0];
     if (!lastWeek) continue;
 
-    // Base clon: mantenemos tu estrategia de clonar la última semana
+    // Base clon: mantenemos tu estrategia de clonar la ultima semana
     const clone = JSON.parse(JSON.stringify(lastWeek));
     clone._id = new ObjectId();
     clone.user_id = new ObjectId(userId);
@@ -210,16 +210,16 @@ async function createProgressionForMultipleUsers(template, user_ids) {
     clone.timestamp = timestamp;
     clone.name = `Semana ${routines.length + 1}`;
 
-    // === SINCRONIZACIÓN DE ESTRUCTURA: la estructura final la dicta el template ===
+    // === SINCRONIZACION DE ESTRUCTURA: la estructura final la dicta el template ===
     // Normalizamos posibles "mobility" -> "movility" en template
     const normalizedTemplDays = templRoutine.map(normalizeMovilityKeys);
 
-    // Armamos nueva lista de días SOLO a partir del template
+    // Armamos nueva lista de dias SOLO a partir del template
     const baseDays = Array.isArray(lastWeek.routine) ? lastWeek.routine.map(normalizeMovilityKeys) : [];
     const newDays = [];
 
     normalizedTemplDays.forEach((templDay, dayIndex) => {
-      // Elegir "baseDay" por mejor match: numberDay > name > índice
+      // Elegir "baseDay" por mejor match: numberDay > name > indice
       const findBaseDayIndex = (td) => {
         // por numberDay
         if (td?.numberDay != null) {
@@ -232,7 +232,7 @@ async function createProgressionForMultipleUsers(template, user_ids) {
           const i = baseDays.findIndex((bd) => keyOfName(bd?.name) === tName);
           if (i >= 0) return i;
         }
-        // fallback por índice
+        // fallback por indice
         return dayIndex < baseDays.length ? dayIndex : -1;
       };
 
@@ -242,47 +242,71 @@ async function createProgressionForMultipleUsers(template, user_ids) {
       // Copiamos base para mutar
       const day = JSON.parse(JSON.stringify(baseDay || {}));
 
-      // ==== NAME del día
+      // ==== NAME del dia
       if (templDay?.name && String(templDay.name).trim() !== '') {
         day.name = templDay.name;
       }
 
       // ==== EXERCISES ====
-      const applyMergeExercise = (ex, templEx) => {
-        if (!templEx) return;
+const applyMergeExercise = (ex, templEx) => {
+  if (!templEx) return;
 
-        // Si hay circuito en el EJERCICIO del usuario, merge por índice
-        if (ex.circuit && Array.isArray(ex.circuit)) {
-          if (!Array.isArray(templEx.circuit)) templEx.circuit = [];
-          ex.circuit = ex.circuit.map((c, cIndex) => {
-            const mergedC = { ...c };
-            const templC = templEx.circuit[cIndex];
-            if (templC) {
-              mergeFields(mergedC, templC, ['reps', 'peso', 'video']);
-            }
-            return mergedC;
-          });
-          mergeFields(ex, templEx, ['type', 'typeOfSets', 'notas', 'numberExercise']);
-        } else {
-          // SIMPLE
-          mergeFields(ex, templEx, [
-            'type', 'sets', 'reps', 'peso', 'rest',
-            'video', 'notas', 'numberExercise', 'valueExercise'
-          ]);
+  // Campos solo de UI: no se deben persistir
+  delete ex.changed;
+  delete ex.supSuffix;
+  delete ex._origIndex;
+  delete ex._origIndexInBlock;
 
-          // backoff en nombre si el template lo trae
-          const templBackoff = templEx?.name?.backoff;
-          if (Array.isArray(templBackoff)) {
-            if (typeof ex.name === 'string') {
-              ex.name = { name: ex.name, backoff: templBackoff };
-            } else if (typeof ex.name === 'object' && typeof ex.name.name === 'string') {
-              ex.name.backoff = templBackoff;
-            } else if (!ex.name) {
-              ex.name = { name: '', backoff: templBackoff };
-            }
-          }
-        }
-      };
+  const templHasCircuit = Array.isArray(templEx.circuit);
+
+  // Si el template es circuito, la estructura final debe salir del template
+  if (templHasCircuit) {
+    ex.type = templEx.type;
+    ex.typeOfSets = templEx.typeOfSets ?? '';
+    ex.name = templEx.name ?? '';
+    ex.notas = templEx.notas ?? '';
+    ex.numberExercise = templEx.numberExercise;
+    ex.valueExercise = templEx.valueExercise ?? ex.valueExercise;
+
+    ex.circuit = (templEx.circuit || []).map((item) => ({
+      name: item?.name ?? '',
+      reps: item?.reps ?? '',
+      peso: item?.peso ?? '',
+      video: item?.video ?? '',
+      idRefresh: item?.idRefresh || new ObjectId().toString()
+    }));
+
+    // Evita basura de ejercicio simple previo
+    delete ex.sets;
+    delete ex.reps;
+    delete ex.peso;
+    delete ex.rest;
+    delete ex.video;
+    return;
+  }
+
+  // Si el template NO es circuito, borramos restos de circuito previo
+  delete ex.circuit;
+  delete ex.typeOfSets;
+
+  mergeFields(ex, templEx, [
+    'name', 'type', 'sets', 'reps', 'peso', 'rest',
+    'video', 'notas', 'numberExercise', 'valueExercise'
+  ]);
+
+  // backoff en name si viene desde template
+  const templBackoff = templEx?.name?.backoff;
+  if (Array.isArray(templBackoff)) {
+    if (typeof ex.name === 'string') {
+      ex.name = { name: ex.name, backoff: templBackoff };
+    } else if (typeof ex.name === 'object' && typeof ex.name.name === 'string') {
+      ex.name.backoff = templBackoff;
+    } else if (!ex.name) {
+      ex.name = { name: '', backoff: templBackoff };
+    }
+  }
+};
+
 
       // Lista final de ejercicios, SIGUE la del template (respeta altas/bajas)
       day.exercises = syncByTemplateList(
@@ -350,7 +374,7 @@ async function createProgressionForMultipleUsers(template, user_ids) {
     });
 
     // La rutina final es EXACTAMENTE la del template (orden y cantidad),
-    // con campos mergeados desde la base donde correspondía.
+    // con campos mergeados desde la base donde correspondia.
     clone.routine = newDays;
 
     newWeeks.push(clone);
@@ -379,7 +403,7 @@ async function updateBlockOfWeek(weekId, blockData) {
   if (result.modifiedCount === 1) {
     return result;
   } else {
-    throw new Error('No se modificó la semana');
+    throw new Error('No se modifico la semana');
   }
 }
 
@@ -537,7 +561,7 @@ async function updateWeekFields(
   }, {});
 
   if (!Object.keys(toSet).length) {
-    throw new Error('No hay campos válidos para actualizar.');
+    throw new Error('No hay campos validos para actualizar.');
   }
 
   const result = await routine.updateOne(
@@ -546,7 +570,7 @@ async function updateWeekFields(
   );
 
   if (!result.modifiedCount) {
-    throw new Error('No se modificó la semana');
+    throw new Error('No se modifico la semana');
   }
   return result;
 }
