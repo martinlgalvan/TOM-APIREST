@@ -10,15 +10,25 @@ app.use(express.urlencoded({ extended: true }))
 app.use(express.json())
 app.use(cookieParser())
 
-const explicitOrigins = (process.env.FRONTEND_ORIGINS || 'http://localhost:5173,http://localhost:3000,https://planificaciontom.com')
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://planificaciontom.com',
+  'https://www.planificaciontom.com'
+]
+
+const envOrigins = (process.env.FRONTEND_ORIGINS || '')
   .split(',')
-  .map((value) => value.trim())
+  .map((value) => value.trim().replace(/\/$/, ''))
   .filter(Boolean)
+
+const explicitOrigins = new Set([...defaultOrigins, ...envOrigins])
 
 function isAllowedOrigin(origin) {
   if (!origin) return true
-  if (explicitOrigins.includes(origin)) return true
-  return /^https:\/\/[^/]+\.vercel\.app$/.test(origin)
+  const normalizedOrigin = origin.replace(/\/$/, '')
+  if (explicitOrigins.has(normalizedOrigin)) return true
+  return /^https:\/\/[^/]+\.vercel\.app$/.test(normalizedOrigin)
 }
 
 app.use(cors({
