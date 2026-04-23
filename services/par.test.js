@@ -1,18 +1,20 @@
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import { MongoClient, ObjectId } from 'mongodb';
-import { createProgressionFromPAR } from './PAR.services.js';
 
 // Pruebas de integracion para createProgressionFromPAR
 describe('createProgressionFromPAR service', () => {
   let mongod;
   let client;
   let db;
+  let PARService;
 
   beforeAll(async () => {
     // Iniciar MongoDB en memoria
     mongod = await MongoMemoryServer.create();
     const uri = mongod.getUri();
     process.env.MONGODB_URI = uri;
+
+    PARService = await import('./PAR.services.js');
 
     // Conexion de prueba
     client = new MongoClient(uri, { useUnifiedTopology: true });
@@ -21,6 +23,9 @@ describe('createProgressionFromPAR service', () => {
   });
 
   afterAll(async () => {
+    if (PARService?.closePARServiceConnectionForTests) {
+      await PARService.closePARServiceConnectionForTests();
+    }
     if (client) await client.close();
     if (mongod) await mongod.stop();
   });
@@ -49,14 +54,15 @@ describe('createProgressionFromPAR service', () => {
 
     await db.collection('PAR').insertOne(motherDoc);
 
-    const newProg = await createProgressionFromPAR(motherId.toHexString());
+    const newProg = await PARService.createProgressionFromPAR(motherId.toHexString());
 
     // Validaciones basicas
     expect(newProg).toBeDefined();
     expect(newProg.parent_par_id.toString()).toBe(motherId.toString());
     expect(newProg.name).toBe('Mother Routine - Progresion 1');
-    expect(typeof newProg.created_at.fecha).toBe('string');
-    expect(typeof newProg.created_at.hora).toBe('string');
+    expect(newProg.created_at).toBeInstanceOf(Date);
+    expect(typeof newProg.created_at_local.fecha).toBe('string');
+    expect(typeof newProg.created_at_local.hora).toBe('string');
     expect(typeof newProg.timestamp).toBe('number');
 
     // Verificar clonacion profunda
@@ -78,8 +84,8 @@ describe('createProgressionFromPAR service', () => {
       timestamp: Date.now()
     });
 
-    const firstProg = await createProgressionFromPAR(motherId.toHexString());
-    const secondProg = await createProgressionFromPAR(motherId.toHexString());
+    const firstProg = await PARService.createProgressionFromPAR(motherId.toHexString());
+    const secondProg = await PARService.createProgressionFromPAR(motherId.toHexString());
 
     // Validar nombre y orden
     expect(secondProg.name).toBe('Mother Routine - Progresion 2');

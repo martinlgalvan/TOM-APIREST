@@ -15,6 +15,30 @@ async function ensureConn() {
   }
 }
 
+export async function closePARServiceConnectionForTests() {
+  try {
+    await client.close();
+  } catch {
+    // noop
+  }
+}
+
+function plainId(value) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (value instanceof ObjectId) return value.toString();
+  if (typeof value === 'object' && '$oid' in value) return String(value.$oid || '');
+  return value.toString ? value.toString() : String(value);
+}
+
+function firstPlainId(...values) {
+  return values.map(plainId).find(Boolean) || '';
+}
+
+function syntheticSource(prefix, parentSource, index) {
+  return `${prefix}:${parentSource || 'root'}:${index}`;
+}
+
 /**
  * Normaliza nombre de keys relacionadas a movilidad:
  * - Si el template trae "mobility", lo mapeamos a "movility".
@@ -29,6 +53,45 @@ function normalizeMovilityKeys(day) {
   delete d.mobility; // evitamos tener ambas
 
   return d;
+}
+
+function cloneExerciseForProgression(exercise, parentSource, index) {
+  const exCopy = { ...exercise };
+
+  if (typeof exCopy.name === 'object' && exCopy.name !== null) {
+    exCopy.name = { ...exCopy.name };
+  }
+
+  if (exCopy.type === 'block') {
+    const blockSource =
+      firstPlainId(exCopy.source_block_id, exCopy.template_block_id, exCopy.original_block_id, exCopy.block_id, exCopy.exercise_id) ||
+      syntheticSource('block', parentSource, index);
+
+    exCopy.source_block_id = blockSource;
+    exCopy.block_id = new ObjectId();
+    exCopy.exercises = Array.isArray(exCopy.exercises)
+      ? exCopy.exercises.map((inner, innerIndex) => cloneExerciseForProgression(inner, blockSource, innerIndex))
+      : [];
+    return exCopy;
+  }
+
+  const exerciseSource =
+    firstPlainId(exCopy.source_exercise_id, exCopy.template_exercise_id, exCopy.original_exercise_id, exCopy.exercise_id) ||
+    syntheticSource('exercise', parentSource, index);
+
+  exCopy.source_exercise_id = exerciseSource;
+  exCopy.exercise_id = new ObjectId();
+
+  if (Array.isArray(exCopy.circuit)) {
+    exCopy.circuit = exCopy.circuit.map((c, itemIndex) => ({
+      ...c,
+      source_circuit_item_id:
+        firstPlainId(c?.source_circuit_item_id, c?.template_circuit_item_id, c?.original_circuit_item_id, c?.idRefresh) ||
+        syntheticSource('circuit-item', exerciseSource, itemIndex),
+    }));
+  }
+
+  return exCopy;
 }
 
 /**
@@ -65,38 +128,38 @@ function clonePARForProgression(templateDoc) {
 
   // Normalizamos/Clonamos dias
   if (Array.isArray(clone.routine)) {
-    clone.routine = clone.routine.map((day) => {
+    clone.routine = clone.routine.map((day, dayIndex) => {
       const nd = normalizeMovilityKeys(day);
-      const newDay = { ...nd, _id: new ObjectId() };
+      const daySource =
+        firstPlainId(nd.source_day_id, nd.template_day_id, nd.original_day_id, nd._id) ||
+        syntheticSource('day', '', dayIndex);
+      const newDay = { ...nd, source_day_id: daySource, _id: new ObjectId() };
 
       // Exercises
       if (Array.isArray(newDay.exercises)) {
-        newDay.exercises = newDay.exercises.map((ex) => {
-          const exCopy = { ...ex, exercise_id: new ObjectId() };
-          // Clonar name si viene como objeto
-          if (typeof exCopy.name === 'object' && exCopy.name !== null) {
-            exCopy.name = { ...exCopy.name };
-          }
-          // Si hay circuitos, mantenemos estructura (no generamos ids si no existen)
-          if (Array.isArray(exCopy.circuit)) {
-            exCopy.circuit = exCopy.circuit.map((c) => ({ ...c }));
-          }
-          return exCopy;
-        });
+        newDay.exercises = newDay.exercises.map((ex, exIndex) =>
+          cloneExerciseForProgression(ex, daySource, exIndex)
+        );
       }
 
       // Warmup
       if (Array.isArray(newDay.warmup)) {
-        newDay.warmup = newDay.warmup.map((wu) => ({
+        newDay.warmup = newDay.warmup.map((wu, wuIndex) => ({
           ...wu,
+          source_warmup_id:
+            firstPlainId(wu.source_warmup_id, wu.template_warmup_id, wu.original_warmup_id, wu.warmup_id) ||
+            syntheticSource('warmup', daySource, wuIndex),
           warmup_id: new ObjectId(),
         }));
       }
 
       // Movility (ya normalizado a 'movility')
       if (Array.isArray(newDay.movility)) {
-        newDay.movility = newDay.movility.map((mo) => ({
+        newDay.movility = newDay.movility.map((mo, moIndex) => ({
           ...mo,
+          source_movility_id:
+            firstPlainId(mo.source_movility_id, mo.template_movility_id, mo.original_movility_id, mo.movility_id) ||
+            syntheticSource('movility', daySource, moIndex),
           movility_id: new ObjectId(),
         }));
       }
@@ -253,5 +316,6 @@ export default {
   createPAR,
   updatePAR,
   deletePAR,
-  createProgressionFromPAR
+  createProgressionFromPAR,
+  closePARServiceConnectionForTests
 };
