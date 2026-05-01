@@ -4,57 +4,16 @@ import * as UsersService from '../../services/users.services.js'
 import * as BlockService from '../../services/block.services.js'
 import * as RoutineServices from '../../services/routine.services.js'
 import * as RefreshTokenService from '../../services/refreshTokens.services.js'
+import {
+  clearRefreshCookie,
+  getJwtSecret,
+  getRefreshSecret,
+  issueSession,
+  sanitizeUser
+} from '../lib/authSession.js'
 // import * as TokenService from '../../services/token.services.js'  // <- ya no se usa si JWT-only
 
 //----------------------------------------------------*
-
-function getJwtSecret() {
-  return process.env.JWT_SECRET || 'toq_'
-}
-
-function getRefreshSecret() {
-  return process.env.JWT_REFRESH_SECRET || getJwtSecret()
-}
-
-function isProd() {
-  return process.env.NODE_ENV === 'production'
-}
-
-function refreshCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: isProd(),                         // true en prod https
-    sameSite: isProd() ? 'none' : 'lax',      // cross-site en prod
-    path: '/api'                              // ✅ clave: cubre /api/users/refresh y /api/auth/refresh
-  }
-}
-
-function signAccessToken(user) {
-  return jwt.sign(
-    { id: user._id.toString(), role: user.role },
-    getJwtSecret(),
-    { expiresIn: process.env.ACCESS_EXPIRES || '1h' }
-  )
-}
-
-function signRefreshToken(user) {
-  return jwt.sign(
-    { id: user._id.toString(), purpose: 'refresh' },
-    getRefreshSecret(),
-    { expiresIn: process.env.REFRESH_EXPIRES || '365d' }
-  )
-}
-
-function addDurationToDate(expiresInStr) {
-  const m = String(expiresInStr).match(/^(\d+)\s*([dhm])$/i)
-  const n = m ? Number(m[1]) : 365
-  const unit = m ? m[2].toLowerCase() : 'd'
-  const ms =
-    unit === 'd' ? n * 24 * 60 * 60 * 1000 :
-    unit === 'h' ? n * 60 * 60 * 1000 :
-                   n * 60 * 1000
-  return new Date(Date.now() + ms)
-}
 
 function extractToken(req) {
   const direct = req.headers['auth-token']
@@ -69,39 +28,11 @@ function extractToken(req) {
   return null
 }
 
-function sanitizeUser(userDoc) {
-  if (!userDoc) return userDoc;
-
-  const u = { ...userDoc };
-  delete u.password;
-
-  if (u.payment_info?.security) {
-    u.payment_info = { ...u.payment_info };
-    u.payment_info.security = { ...u.payment_info.security };
-    delete u.payment_info.security.password;
-  }
-
-  return u;
-}
-
 async function login(req, res) {
   try {
     const user = await UsersService.login(req.body)
 
-    const accessToken = signAccessToken(user)
-    const refreshToken = signRefreshToken(user)
-
-    const refreshExp = addDurationToDate(process.env.REFRESH_EXPIRES || '365d')
-    await RefreshTokenService.save({
-      userId: user._id.toString(),
-      token: refreshToken,
-      expiresAt: refreshExp
-    })
-
-    res.cookie('refresh_token', refreshToken, {
-      ...refreshCookieOptions(),
-      expires: refreshExp
-    })
+    const { accessToken } = await issueSession(res, user)
 
     return res.status(200).json({ token: accessToken, user: sanitizeUser(user) })
   } catch (err) {
@@ -113,6 +44,7 @@ async function refresh(req, res) {
   try {
     const token = req.cookies?.refresh_token
     if (!token) {
+      clearRefreshCookie(res)
       return res.status(401).json({ message: 'No refresh token', code: 'REFRESH_MISSING' })
     }
 
@@ -121,10 +53,12 @@ async function refresh(req, res) {
       decoded = jwt.verify(token, getRefreshSecret())
     } catch (e) {
       const code = e?.name === 'TokenExpiredError' ? 'REFRESH_EXPIRED' : 'REFRESH_INVALID'
+      clearRefreshCookie(res)
       return res.status(401).json({ message: 'Refresh invalido/expirado', code })
     }
 
     if (decoded?.purpose !== 'refresh') {
+      clearRefreshCookie(res)
       return res.status(401).json({ message: 'Refresh invalido (purpose)', code: 'REFRESH_INVALID' })
     }
 
@@ -132,6 +66,7 @@ async function refresh(req, res) {
 
     const ok = await RefreshTokenService.existsAndActive({ userId, token })
     if (!ok) {
+      clearRefreshCookie(res)
       return res.status(401).json({ message: 'Refresh revocado/no valido', code: 'REFRESH_REVOKED' })
     }
 
@@ -140,21 +75,13 @@ async function refresh(req, res) {
 
     const user = await UsersService.findById(userId)
     if (!user) {
+      clearRefreshCookie(res)
       return res.status(401).json({ message: 'Usuario no encontrado', code: 'USER_NOT_FOUND' })
     }
 
-    const newAccess = signAccessToken(user)
-    const newRefresh = signRefreshToken(user)
-    const refreshExp = addDurationToDate(process.env.REFRESH_EXPIRES || '365d')
+    const { accessToken } = await issueSession(res, user)
 
-    await RefreshTokenService.save({ userId, token: newRefresh, expiresAt: refreshExp })
-
-    res.cookie('refresh_token', newRefresh, {
-      ...refreshCookieOptions(),
-      expires: refreshExp
-    })
-
-    return res.status(200).json({ token: newAccess })
+    return res.status(200).json({ token: accessToken })
   } catch (err) {
     return res.status(500).json({ message: 'Error interno', error: err.message })
   }
@@ -173,7 +100,7 @@ async function logout(req, res) {
       } catch {}
     }
 
-    res.clearCookie('refresh_token', refreshCookieOptions())
+    clearRefreshCookie(res)
     return res.json({ message: 'Logout exitoso' })
   } catch (err) {
     return res.status(500).json({ message: 'Error interno', error: err.message })
@@ -678,3 +605,4 @@ export {
   updateItem,
   deleteItem
 }
+

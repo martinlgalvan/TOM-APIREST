@@ -72,14 +72,17 @@ async function deleteDay(week_id, day_id ){
       })
 }    
 
-async function createWeek(week, user_id, block_id = null) {
+async function createWeek(week, user_id, block_id = null, options = {}) {
   const timestamp = new Date().getTime()
+  const weekBlockState = resolveWeekBlockState(week);
   const newWeek = {
     ...week,
+    routine: options?.templateAssignment ? prepareRoutineForTemplateAssignment(week?.routine) : week?.routine,
+    block: weekBlockState.block,
     user_id: new ObjectId(user_id),
     created_at: getDate(),
     timestamp,
-    block_id: block_id ? new ObjectId(block_id) : (week.block_id ? new ObjectId(week.block_id) : null)
+    block_id: block_id ? new ObjectId(block_id) : weekBlockState.block_id
   }
   await client.connect()
   await routine.insertOne(newWeek)
@@ -90,6 +93,8 @@ async function createPARforMultipleUsers(PAR, user_ids) {
   const timestamp = new Date().getTime();
   const newPARs = user_ids.map((userId) => ({
     ...PAR,
+    routine: prepareRoutineForTemplateAssignment(PAR?.routine),
+    ...resolveWeekBlockState(PAR),
     user_id: new ObjectId(userId),
     created_at: getDate(),
     timestamp
@@ -173,6 +178,57 @@ function plainId(value) {
 
 function firstPlainId(...values) {
   return values.map(plainId).find(Boolean) || '';
+}
+
+function hasOwn(obj, key) {
+  return Boolean(obj) && Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function toObjectIdOrNull(value) {
+  const id = plainId(value);
+  return id && ObjectId.isValid(id) ? new ObjectId(id) : null;
+}
+
+function resolveWeekBlockState(sourceWeek, fallbackWeek = null) {
+  const sourceHasBlock = hasOwn(sourceWeek, 'block');
+  const sourceHasBlockId = hasOwn(sourceWeek, 'block_id');
+  const fallbackHasBlock = hasOwn(fallbackWeek, 'block');
+  const fallbackHasBlockId = hasOwn(fallbackWeek, 'block_id');
+
+  let blockValue;
+  let rawBlockId;
+
+  if (sourceHasBlock) {
+    blockValue = sourceWeek.block ?? null;
+    rawBlockId = sourceWeek.block == null
+      ? null
+      : firstPlainId(
+          sourceWeek.block_id,
+          sourceWeek.block?._id,
+          sourceWeek.block?.block_id
+        );
+  } else if (sourceHasBlockId) {
+    blockValue = fallbackHasBlock ? clonePlain(fallbackWeek.block) : null;
+    rawBlockId = sourceWeek.block_id;
+  } else if (fallbackHasBlock) {
+    blockValue = fallbackWeek.block ?? null;
+    rawBlockId = firstPlainId(
+      fallbackWeek.block_id,
+      fallbackWeek.block?._id,
+      fallbackWeek.block?.block_id
+    );
+  } else if (fallbackHasBlockId) {
+    blockValue = null;
+    rawBlockId = fallbackWeek.block_id;
+  } else {
+    blockValue = null;
+    rawBlockId = null;
+  }
+
+  return {
+    block: blockValue == null ? null : clonePlain(blockValue),
+    block_id: toObjectIdOrNull(rawBlockId)
+  };
 }
 
 function syntheticSource(prefix, parentSource, index) {
@@ -397,6 +453,21 @@ function regenerateMovilityRuntimeId(movility) {
   return { ...clonePlain(movility), movility_id: new ObjectId() };
 }
 
+function prepareRoutineForTemplateAssignment(routineArray) {
+  const templRoutine = stampTemplateRoutineSources(routineArray);
+  return templRoutine.map((templDay) => {
+    const day = normalizeMovilityKeys(templDay);
+
+    return {
+      ...clonePlain(day),
+      _id: new ObjectId(),
+      exercises: (Array.isArray(day.exercises) ? day.exercises : []).map(regenerateExerciseRuntimeIds),
+      warmup: (Array.isArray(day.warmup) ? day.warmup : []).map(regenerateWarmupRuntimeId),
+      movility: (Array.isArray(day.movility) ? day.movility : []).map(regenerateMovilityRuntimeId),
+    };
+  });
+}
+
 
 // === Reemplazo completo de tu createProgressionForMultipleUsers ===
 
@@ -420,6 +491,9 @@ async function createProgressionForMultipleUsers(template, user_ids) {
     clone.created_at = getDate();
     clone.timestamp = timestamp;
     clone.name = `Semana ${routines.length + 1}`;
+    const weekBlockState = resolveWeekBlockState(template, clone);
+    clone.block = weekBlockState.block;
+    clone.block_id = weekBlockState.block_id;
 
     // === SINCRONIZACION DE ESTRUCTURA: la estructura final la dicta el template ===
     // Normalizamos posibles "mobility" -> "movility" en template

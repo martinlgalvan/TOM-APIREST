@@ -109,3 +109,7 @@ export async function deleteExpired() {
 
   return { deleted: res.deletedCount || 0 }
 }
+
+export async function closeRefreshTokensServiceConnectionForTests() {
+  await client.close()
+}

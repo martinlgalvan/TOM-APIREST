@@ -39,6 +39,33 @@ function syntheticSource(prefix, parentSource, index) {
   return `${prefix}:${parentSource || 'root'}:${index}`;
 }
 
+function toObjectIdOrNull(value) {
+  const id = plainId(value);
+  return id && ObjectId.isValid(id) ? new ObjectId(id) : null;
+}
+
+function resolveWeekBlockFields(week = {}) {
+  if (Object.prototype.hasOwnProperty.call(week, 'block')) {
+    if (week.block == null) {
+      return { block: null, block_id: null };
+    }
+
+    return {
+      block: { ...week.block },
+      block_id: toObjectIdOrNull(week.block_id ?? week.block?._id ?? week.block?.block_id)
+    };
+  }
+
+  if (Object.prototype.hasOwnProperty.call(week, 'block_id')) {
+    return {
+      block: week.block ?? null,
+      block_id: toObjectIdOrNull(week.block_id)
+    };
+  }
+
+  return {};
+}
+
 /**
  * Normaliza nombre de keys relacionadas a movilidad:
  * - Si el template trae "mobility", lo mapeamos a "movility".
@@ -190,6 +217,7 @@ export async function createPAR(PAR, user_id) {
   const now = new Date();
   const newPAR = {
     ...PAR,
+    ...resolveWeekBlockFields(PAR),
     user_id: new ObjectId(user_id),
     // Fechas normalizadas
     created_at: now,        // Date usable para agregados/orden
@@ -211,6 +239,7 @@ export async function updatePAR(id, updatedPAR) {
 
   const filter = { _id: new ObjectId(id) };
   const { _id, ...updatedFields } = updatedPAR;
+  Object.assign(updatedFields, resolveWeekBlockFields(updatedFields));
 
   const update = {
     $set: {

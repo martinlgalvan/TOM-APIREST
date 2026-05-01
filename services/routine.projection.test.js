@@ -198,6 +198,178 @@ describe('createProgressionForMultipleUsers service', () => {
     expect(martinWeek.routine[0].exercises[1].circuit[0].peso).toBe('40');
   });
 
+  test('mantiene nombres personalizados cuando la semana madre fue asignada con source ids regenerando runtime ids', async () => {
+    const juanId = new ObjectId();
+    const martinId = new ObjectId();
+    const motherDayId = new ObjectId();
+    const motherExerciseId = new ObjectId();
+
+    const motherWeek = {
+      name: 'Semana madre',
+      routine: [
+        {
+          _id: motherDayId,
+          name: 'Dia madre',
+          exercises: [
+            {
+              exercise_id: motherExerciseId,
+              type: 'exercise',
+              numberExercise: 1,
+              name: 'Ejercicio madre',
+              sets: 3,
+              reps: 5,
+              peso: '100'
+            }
+          ],
+          warmup: [],
+          movility: []
+        }
+      ]
+    };
+
+    await RoutineService.createWeek(motherWeek, juanId.toString(), null, { templateAssignment: true });
+    await RoutineService.createWeek(motherWeek, martinId.toString(), null, { templateAssignment: true });
+
+    const juanAssigned = await db.collection('Routine').findOne({ user_id: juanId });
+    const martinAssigned = await db.collection('Routine').findOne({ user_id: martinId });
+
+    expect(juanAssigned.routine[0].source_day_id).toBe(motherDayId.toString());
+    expect(juanAssigned.routine[0].exercises[0].source_exercise_id).toBe(motherExerciseId.toString());
+    expect(String(juanAssigned.routine[0].exercises[0].exercise_id)).not.toBe(motherExerciseId.toString());
+
+    juanAssigned.timestamp = 100;
+    juanAssigned.routine[0].name = 'Dia Juan';
+    juanAssigned.routine[0].exercises[0].name = 'Sentadilla Juan';
+    martinAssigned.timestamp = 100;
+    martinAssigned.routine[0].name = 'Dia Martin';
+    martinAssigned.routine[0].exercises[0].name = 'Sentadilla Martin';
+
+    await db.collection('Routine').replaceOne({ _id: juanAssigned._id }, juanAssigned);
+    await db.collection('Routine').replaceOne({ _id: martinAssigned._id }, martinAssigned);
+
+    const [juanProjection, martinProjection] = await RoutineService.createProgressionForMultipleUsers(
+      {
+        name: 'Proyeccion 1',
+        routine: [
+          {
+            _id: new ObjectId(),
+            source_day_id: motherDayId.toString(),
+            name: 'Dia proyectado',
+            exercises: [
+              {
+                exercise_id: new ObjectId(),
+                source_exercise_id: motherExerciseId.toString(),
+                type: 'exercise',
+                numberExercise: 1,
+                name: 'Ejercicio proyectado',
+                sets: 5,
+                reps: 3,
+                peso: '140'
+              }
+            ],
+            warmup: [],
+            movility: []
+          }
+        ]
+      },
+      [juanId.toString(), martinId.toString()]
+    );
+
+    expect(juanProjection.routine[0].name).toBe('Dia proyectado');
+    expect(juanProjection.routine[0].exercises[0].name).toBe('Sentadilla Juan');
+    expect(juanProjection.routine[0].exercises[0].sets).toBe(5);
+    expect(juanProjection.routine[0].exercises[0].reps).toBe(3);
+    expect(juanProjection.routine[0].exercises[0].peso).toBe('140');
+
+    expect(martinProjection.routine[0].name).toBe('Dia proyectado');
+    expect(martinProjection.routine[0].exercises[0].name).toBe('Sentadilla Martin');
+    expect(martinProjection.routine[0].exercises[0].sets).toBe(5);
+    expect(martinProjection.routine[0].exercises[0].reps).toBe(3);
+    expect(martinProjection.routine[0].exercises[0].peso).toBe('140');
+  });
+
+  test('sincroniza bloque y block_id al asignar madre y al aplicar proyeccion', async () => {
+    const userId = new ObjectId();
+    const motherDayId = new ObjectId();
+    const motherExerciseId = new ObjectId();
+    const initialBlockId = new ObjectId().toString();
+    const projectedBlockId = new ObjectId().toString();
+
+    await RoutineService.createWeek(
+      {
+        name: 'Semana madre con bloque',
+        block: {
+          _id: initialBlockId,
+          name: 'Bloque Inicial'
+        },
+        routine: [
+          {
+            _id: motherDayId,
+            name: 'Dia 1',
+            exercises: [
+              {
+                exercise_id: motherExerciseId,
+                type: 'exercise',
+                numberExercise: 1,
+                name: 'Ejercicio base',
+                sets: 3,
+                reps: 5
+              }
+            ],
+            warmup: [],
+            movility: []
+          }
+        ]
+      },
+      userId.toString(),
+      null,
+      { templateAssignment: true }
+    );
+
+    const assigned = await db.collection('Routine').findOne({ user_id: userId });
+    expect(assigned.block._id).toBe(initialBlockId);
+    expect(String(assigned.block_id)).toBe(initialBlockId);
+
+    assigned.timestamp = 100;
+    assigned.routine[0].exercises[0].name = 'Nombre propio';
+    await db.collection('Routine').replaceOne({ _id: assigned._id }, assigned);
+
+    const [projected] = await RoutineService.createProgressionForMultipleUsers(
+      {
+        name: 'Proyeccion bloque',
+        block: {
+          _id: projectedBlockId,
+          name: 'Bloque Proyectado'
+        },
+        routine: [
+          {
+            _id: new ObjectId(),
+            source_day_id: motherDayId.toString(),
+            name: 'Dia 1',
+            exercises: [
+              {
+                exercise_id: new ObjectId(),
+                source_exercise_id: motherExerciseId.toString(),
+                type: 'exercise',
+                numberExercise: 1,
+                name: 'Ejercicio plantilla',
+                sets: 4,
+                reps: 4
+              }
+            ],
+            warmup: [],
+            movility: []
+          }
+        ]
+      },
+      [userId.toString()]
+    );
+
+    expect(projected.block._id).toBe(projectedBlockId);
+    expect(String(projected.block_id)).toBe(projectedBlockId);
+    expect(projected.routine[0].exercises[0].name).toBe('Nombre propio');
+  });
+
   test('usa la posicion antes que el nombre para datos legacy sin source ids', async () => {
     const userId = new ObjectId();
 

@@ -1,43 +1,8 @@
 import jwt from 'jsonwebtoken'
 import * as userService from '../../services/users.services.js'
-import * as RefreshTokenService from '../../services/refreshTokens.services.js'
+import { getJwtSecret, issueRefreshSession } from '../lib/authSession.js'
 
 // Helpers
-function getJwtSecret() {
-  return process.env.JWT_SECRET || 'toq_'
-}
-function getRefreshSecret() {
-  return process.env.JWT_REFRESH_SECRET || getJwtSecret()
-}
-function isProd() {
-  return process.env.NODE_ENV === 'production'
-}
-function refreshCookieOptions() {
-  return {
-    httpOnly: true,
-    secure: isProd(),                         // true en prod (https)
-    sameSite: isProd() ? 'none' : 'lax',      // cross-site en prod
-    path: '/api'                               // cubre /api/auth/refresh y /api/users/refresh si existiera
-  }
-}
-function signRefreshToken(user) {
-  return jwt.sign(
-    { id: user._id.toString(), purpose: 'refresh' },
-    getRefreshSecret(),
-    { expiresIn: process.env.REFRESH_EXPIRES || '365d' }
-  )
-}
-function addDurationToDate(expiresInStr) {
-  const m = String(expiresInStr).match(/^(\d+)\s*([dhm])$/i)
-  const n = m ? Number(m[1]) : 365
-  const unit = m ? m[2].toLowerCase() : 'd'
-  const ms =
-    unit === 'd' ? n * 24 * 60 * 60 * 1000 :
-    unit === 'h' ? n * 60 * 60 * 1000 :
-                   n * 60 * 1000
-  return new Date(Date.now() + ms)
-}
-
 function extractToken(req) {
   const direct = req.headers['auth-token']
   if (direct) return direct
@@ -55,19 +20,7 @@ async function ensureRefreshCookie(req, res, user) {
   if (req.cookies?.refresh_token) return
 
   // Emitimos refresh nuevo (upgrade silencioso)
-  const refreshToken = signRefreshToken(user)
-  const refreshExp = addDurationToDate(process.env.REFRESH_EXPIRES || '365d')
-
-  await RefreshTokenService.save({
-    userId: user._id.toString(),
-    token: refreshToken,
-    expiresAt: refreshExp
-  })
-
-  res.cookie('refresh_token', refreshToken, {
-    ...refreshCookieOptions(),
-    expires: refreshExp
-  })
+  await issueRefreshSession(res, user)
 }
 
 function isLogin(req, res, next) {

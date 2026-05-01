@@ -6,12 +6,9 @@ import QRCode from 'qrcode';
 import * as UsersService from '../../services/users.services.js';
 import * as RoutineServices from '../../services/routine.services.js'
 import * as PARservices from '../../services/PAR.services.js'
+import { getJwtSecret, issueSession, sanitizeUser } from '../lib/authSession.js'
 
 //HELPERS 
-
-function getJwtSecret() {
-  return process.env.JWT_SECRET || 'toq_';
-}
 
 // Clon profundo seguro (sin JSON.stringify para no romper ObjectId)
 function deepClone(obj) {
@@ -770,7 +767,7 @@ function createPARweekInRoutine(req, res){
           if(req.body.routine){
               week.routine = req.body.routine
           } 
-          RoutineServices.createWeek(week,user_id)
+          RoutineServices.createWeek(week, user_id, null, { templateAssignment: true })
               .then((data) => {
                   res.status(201).json(serializeRoutineDoc(data))
               })
@@ -924,15 +921,9 @@ async function loginWithQR(req, res) {
       return res.status(404).json({ message: "Usuario no encontrado." });
     }
 
-    // ✅ Token de sesion (igual que login normal) + id string
-    const sessionToken = jwt.sign(
-      { id: user._id.toString(), role: user.role },
-      ACCESS_SECRET,
-      { expiresIn: '30d' }
-    );
+    const { accessToken } = await issueSession(res, user)
 
-    // ✅ Misma forma que /api/users/login
-    res.status(200).json({ token: sessionToken, user });
+    res.status(200).json({ token: accessToken, user: sanitizeUser(user) });
   } catch (error) {
     res.status(400).json({ message: "Token invalido o expirado.", error: error.message });
   }
