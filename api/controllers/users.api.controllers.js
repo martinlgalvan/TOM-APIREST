@@ -81,7 +81,7 @@ async function refresh(req, res) {
 
     const { accessToken } = await issueSession(res, user)
 
-    return res.status(200).json({ token: accessToken })
+    return res.status(200).json({ token: accessToken, user: sanitizeUser(user) })
   } catch (err) {
     return res.status(500).json({ message: 'Error interno', error: err.message })
   }
