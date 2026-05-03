@@ -18,6 +18,10 @@ function getRefreshExpires() {
   return process.env.REFRESH_EXPIRES || '365d'
 }
 
+function getAccessRestoreExpires() {
+  return process.env.ACCESS_RESTORE_EXPIRES || getRefreshExpires()
+}
+
 function getRefreshSameSite() {
   const configured = String(process.env.REFRESH_COOKIE_SAMESITE || '').trim().toLowerCase()
   if (configured === 'strict' || configured === 'none') return configured
@@ -54,14 +58,18 @@ function signRefreshToken(user) {
 }
 
 function addDurationToDate(expiresInStr) {
+  return new Date(Date.now() + durationToMs(expiresInStr))
+}
+
+function durationToMs(expiresInStr) {
   const m = String(expiresInStr).match(/^(\d+)\s*([dhm])$/i)
   const n = m ? Number(m[1]) : 365
   const unit = m ? m[2].toLowerCase() : 'd'
-  const ms =
+  return (
     unit === 'd' ? n * 24 * 60 * 60 * 1000 :
     unit === 'h' ? n * 60 * 60 * 1000 :
                    n * 60 * 1000
-  return new Date(Date.now() + ms)
+  )
 }
 
 function setRefreshCookie(res, token, expiresAt) {
@@ -115,7 +123,9 @@ function sanitizeUser(userDoc) {
 export {
   addDurationToDate,
   clearRefreshCookie,
+  durationToMs,
   getJwtSecret,
+  getAccessRestoreExpires,
   getRefreshSecret,
   issueRefreshSession,
   issueSession,

@@ -6,6 +6,8 @@ import * as RoutineServices from '../../services/routine.services.js'
 import * as RefreshTokenService from '../../services/refreshTokens.services.js'
 import {
   clearRefreshCookie,
+  durationToMs,
+  getAccessRestoreExpires,
   getJwtSecret,
   getRefreshSecret,
   issueSession,
@@ -42,41 +44,75 @@ async function login(req, res) {
 
 async function refresh(req, res) {
   try {
-    const token = req.cookies?.refresh_token
-    if (!token) {
-      clearRefreshCookie(res)
-      return res.status(401).json({ message: 'No refresh token', code: 'REFRESH_MISSING' })
+    const refreshToken = req.cookies?.refresh_token
+    const currentAccessToken = extractToken(req)
+    const restoreWindowMs = durationToMs(getAccessRestoreExpires())
+
+    let user = null
+    let failure = { message: 'No refresh token', code: 'REFRESH_MISSING' }
+
+    if (refreshToken) {
+      let decodedRefresh
+      try {
+        decodedRefresh = jwt.verify(refreshToken, getRefreshSecret())
+      } catch (e) {
+        const code = e?.name === 'TokenExpiredError' ? 'REFRESH_EXPIRED' : 'REFRESH_INVALID'
+        clearRefreshCookie(res)
+        failure = { message: 'Refresh invalido/expirado', code }
+      }
+
+      if (!user && decodedRefresh) {
+        if (decodedRefresh?.purpose !== 'refresh') {
+          clearRefreshCookie(res)
+          failure = { message: 'Refresh invalido (purpose)', code: 'REFRESH_INVALID' }
+        } else {
+          const userId = String(decodedRefresh.id)
+          const ok = await RefreshTokenService.existsAndActive({ userId, token: refreshToken })
+
+          if (!ok) {
+            clearRefreshCookie(res)
+            failure = { message: 'Refresh revocado/no valido', code: 'REFRESH_REVOKED' }
+          } else {
+            await RefreshTokenService.revoke({ userId, token: refreshToken })
+            user = await UsersService.findById(userId)
+
+            if (!user) {
+              clearRefreshCookie(res)
+              failure = { message: 'Usuario no encontrado', code: 'USER_NOT_FOUND' }
+            }
+          }
+        }
+      }
     }
 
-    let decoded
-    try {
-      decoded = jwt.verify(token, getRefreshSecret())
-    } catch (e) {
-      const code = e?.name === 'TokenExpiredError' ? 'REFRESH_EXPIRED' : 'REFRESH_INVALID'
-      clearRefreshCookie(res)
-      return res.status(401).json({ message: 'Refresh invalido/expirado', code })
+    if (!user && currentAccessToken) {
+      try {
+        const decodedAccess = jwt.verify(currentAccessToken, getJwtSecret(), { ignoreExpiration: true })
+        const issuedAtMs = Number(decodedAccess?.iat || 0) * 1000
+        const canRestore =
+          decodedAccess?.id &&
+          decodedAccess?.purpose !== 'refresh' &&
+          issuedAtMs > 0 &&
+          (issuedAtMs + restoreWindowMs) > Date.now()
+
+        if (canRestore) {
+          user = await UsersService.findById(String(decodedAccess.id))
+          if (!user) {
+            failure = { message: 'Usuario no encontrado', code: 'USER_NOT_FOUND' }
+          }
+        } else {
+          failure = { message: 'Sesion no restaurable', code: 'ACCESS_RESTORE_EXPIRED' }
+        }
+      } catch (e) {
+        failure = { message: 'Sesion no restaurable', code: 'ACCESS_RESTORE_INVALID' }
+      }
     }
 
-    if (decoded?.purpose !== 'refresh') {
-      clearRefreshCookie(res)
-      return res.status(401).json({ message: 'Refresh invalido (purpose)', code: 'REFRESH_INVALID' })
-    }
-
-    const userId = String(decoded.id)
-
-    const ok = await RefreshTokenService.existsAndActive({ userId, token })
-    if (!ok) {
-      clearRefreshCookie(res)
-      return res.status(401).json({ message: 'Refresh revocado/no valido', code: 'REFRESH_REVOKED' })
-    }
-
-    // rotacion sliding
-    await RefreshTokenService.revoke({ userId, token })
-
-    const user = await UsersService.findById(userId)
     if (!user) {
-      clearRefreshCookie(res)
-      return res.status(401).json({ message: 'Usuario no encontrado', code: 'USER_NOT_FOUND' })
+      if (!currentAccessToken && !refreshToken) {
+        clearRefreshCookie(res)
+      }
+      return res.status(401).json(failure)
     }
 
     const { accessToken } = await issueSession(res, user)
