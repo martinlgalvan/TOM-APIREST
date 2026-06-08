@@ -863,6 +863,8 @@ async function getAnnouncementsForUser(userId, category) {
   const visibles = anuncios.filter(anuncio => {
     const modo = anuncio.mode;
     const readLogs = Array.isArray(anuncio.read_log) ? anuncio.read_log : [];
+    const readBy = Array.isArray(anuncio.read_by) ? anuncio.read_by : [];
+    const alreadyReadByUser = readBy.some(id => id?.toString() === userId);
 
     const logsUsuario = readLogs
       .filter(log => log.user_id?.toString() === userId)
@@ -873,6 +875,8 @@ async function getAnnouncementsForUser(userId, category) {
     if (modo === 'once') {
       const showDate = new Date(anuncio.show_at_date);
       if (now >= showDate) {
+        if (alreadyReadByUser) return false;
+
         // Compatibilidad: historicamente algunos read_log guardaron solo YYYY-MM-DD.
         // Eso cae a medianoche y podia dejar el anuncio "no leido" aunque ya se hubiese visto.
         return !fueLeidoEn(logDate => {
