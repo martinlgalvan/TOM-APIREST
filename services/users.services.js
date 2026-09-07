@@ -1,14 +1,9 @@
-import { MongoClient, ObjectId } from 'mongodb'
-import dotenv from 'dotenv';
-
-// Carga las variables de entorno desde el archivo .env
-dotenv.config();
+import { ObjectId } from 'mongodb'
 import { getDate } from './../date/formatedDate.js'
 import bcrypt from 'bcryptjs';
 import { getISOWeek } from 'date-fns';
+import { client, db } from './db.js'
 
-const client = new MongoClient(process.env.MONGODB_URI)
-const db = client.db('TOM')
 const users = db.collection('Users')
 const userProfile = db.collection('usersProfile')
 const announcements = db.collection('Announcements');
@@ -37,6 +32,16 @@ async function getUsersByEntrenadorId(entrenador_id) {
         .sort({ "created_at.fecha": -1, "created_at.hora": -1 })
         .toArray();
     });
+}
+
+/**
+ * Cuenta los alumnos de un entrenador sin traerse los documentos.
+ * Se usa para el limite de plan: antes se hacia un find().toArray() completo
+ * solo para leer .length, lo que traia cientos de documentos por request.
+ */
+async function countUsersByEntrenadorId(entrenador_id) {
+  await client.connect();
+  return users.countDocuments({ entrenador_id: new ObjectId(entrenador_id) });
 }
 
 // Normaliza un campo de fecha que puede venir como Date | string ISO | {fecha, hora}
@@ -570,38 +575,92 @@ async function create(user, entrenador_id, logo) {
     return newUser;
 }
 
+/**
+ * Reemplaza la contrasena de un usuario por una nueva (ya en texto plano),
+ * hasheandola con el mismo esquema que usa `create`.
+ *
+ * No pide la contrasena anterior a proposito: este flujo es "el entrenador le
+ * resetea la clave al alumno", no "el usuario cambia su propia clave". Quien
+ * puede llamarlo se controla en la capa de rutas (isLogin + ownsStudent).
+ */
+async function updateUserPassword(userId, plainPassword) {
+    await client.connect()
+
+    const salt = await bcrypt.genSalt(10)
+    const hashed = await bcrypt.hash(plainPassword, salt)
+
+    const result = await users.updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: { password: hashed, password_updated_at: new Date() } }
+    )
+
+    if (!result.matchedCount) {
+        const error = new Error('Usuario no encontrado')
+        error.status = 404
+        throw error
+    }
+
+    return result
+}
+
+/**
+ * Da de baja a un alumno y borra sus semanas.
+ *
+ * Antes solo se borraba el usuario y las semanas quedaban en Routine sin
+ * dueno: no se veian ni se podian borrar desde la aplicacion, y se acumulaban
+ * con cada baja.
+ *
+ * Las semanas se borran primero a proposito. Si ese borrado falla, el alumno
+ * sigue existiendo y la baja se puede reintentar; al reves quedaria el alumno
+ * borrado y las semanas huerfanas, que es el problema que esto arregla.
+ */
 async function remove(id) {
     await client.connect()
 
-    await users.deleteOne({ _id: ObjectId(id) })
+    const _id = new ObjectId(id)
+
+    const semanas = await routine.deleteMany({ user_id: _id })
+    const baja = await users.deleteOne({ _id })
+
+    return { deletedCount: baja.deletedCount, semanasBorradas: semanas.deletedCount }
 }
 
-async function addUserProperty(userId, category) {
+/**
+ * Setea `category` en un usuario. Si ese usuario es un entrenador, ademas
+ * propaga la categoria a todos sus alumnos (comportamiento historico).
+ *
+ * `knownUser` permite pasar el documento ya cargado (por ej. el que dejo el
+ * middleware ownsStudent en req.targetUser) y evitar releerlo de la base.
+ * Antes esta funcion hacia 3 viajes a Mongo por llamada: un findById, un
+ * updateOne y un updateMany que, cuando el target es un alumno, no matchea
+ * nunca nada. Ahora hace 1 (o 2 si de verdad es un entrenador).
+ */
+async function addUserProperty(userId, category, knownUser = null) {
     try {
-        const trainer = await findById(userId); // Obtener el entrenador
-        
-        if (!trainer) {
-            throw new Error('Entrenador no encontrado');
-        }
-        
-        // Agregar las propiedades al entrenador
-        trainer.category = category;
+        const target = knownUser || await findById(userId);
 
-        
-        // Actualizar el entrenador con las nuevas propiedades
+        if (!target) {
+            throw new Error('Usuario no encontrado');
+        }
+
+        await client.connect();
+
         await users.updateOne(
-            { $or: [{"_id" : userId}, {"_id" : new ObjectId(userId)}] },
+            { _id: new ObjectId(userId) },
             { $set: { category: category } }
         );
-        
-        // Actualizar a todos los alumnos del entrenador
-        const updatedStudents = await users.updateMany(
-            { entrenador_id: new ObjectId(userId) },
-            { $set: { category: category} }
-        );
-        
-        // Devolver el entrenador actualizado
-        return trainer;
+
+        // Solo tiene sentido cascadear si el target es realmente un entrenador.
+        // Para un alumno el filtro { entrenador_id: <id del alumno> } matchea
+        // cero documentos siempre, asi que era una query desperdiciada.
+        if (target.role === 'admin') {
+            await users.updateMany(
+                { entrenador_id: new ObjectId(userId) },
+                { $set: { category: category } }
+            );
+        }
+
+        return { ...target, category };
     } catch (error) {
         throw new Error(`Error al agregar la propiedad al usuario: ${error.message}`);
     }
@@ -1421,12 +1480,14 @@ export async function deleteItem(ownerId, itemId) {
 
 export {
     getUsersByEntrenadorId,
+    countUsersByEntrenadorId,
     getUsersByEntrenadorIdWithLastWeek,
     find,
     create,
     remove,
     login,
     findById,
+    updateUserPassword,
     addUserProperty,
     findProfileByID,
     upsertUserDetails,

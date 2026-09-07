@@ -1,4 +1,4 @@
-import * as userService from '../../services/users.services.js';
+import * as userService from '../services/users.services.js';
 
 const plans = {
   Gratuito: { maxUsers: 5},
@@ -12,8 +12,9 @@ const plans = {
 
 async function checkPlanLimit(req, res, next) {
   try {
-    const adminId = req.user._id; // Obtenemos el admin desde el `isLogin` middleware
-    const adminUser = await userService.findById(adminId);
+    // `isLogin` ya cargo el documento completo del admin en req.user.
+    const adminUser = req.user;
+    const adminId = adminUser?._id;
 
     if (!adminUser || adminUser.role !== 'admin') {
       return res.status(403).json({ message: 'Acceso denegado. Solo los administradores pueden crear usuarios.' });
@@ -26,9 +27,10 @@ async function checkPlanLimit(req, res, next) {
       return res.status(400).json({ message: 'El plan asignado al usuario no es valido.' });
     }
 
-    const createdUsersCount = await userService.getUsersByEntrenadorId(adminId);
+    // countDocuments en vez de traer todos los alumnos solo para hacer .length
+    const createdUsersCount = await userService.countUsersByEntrenadorId(adminId);
 
-    if (createdUsersCount.length >= planDetails.maxUsers) {
+    if (createdUsersCount >= planDetails.maxUsers) {
       return res.status(403).json({
         message: `Has alcanzado el limite de usuarios para el plan ${adminPlan}. Maximo permitido: ${planDetails.maxUsers}.`,
       });

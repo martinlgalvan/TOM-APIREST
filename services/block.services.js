@@ -1,11 +1,6 @@
 import { ObjectId } from 'mongodb'
-import dotenv from 'dotenv'
-import { MongoClient } from 'mongodb'
+import { client, db } from './db.js'
 
-dotenv.config()
-
-const client = new MongoClient(process.env.MONGODB_URI, { keepAlive: true })
-const db = client.db('TOM')
 const blocks = db.collection('Blocks')
 
 function recursivelyConvertIds(obj) {

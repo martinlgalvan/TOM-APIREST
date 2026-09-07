@@ -1,1 +1,13 @@
 node_modules
+
+# Variables de entorno: el archivo vive solo en la maquina.
+# En produccion las provee Vercel; en local se copia de .env.example.
+.env
+.env.local
+.env.*.local
+
+# Resultados de pruebas
+coverage
+
+# Copias de seguridad que generan los scripts de mantenimiento
+respaldos/

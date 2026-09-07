@@ -1,9 +1,8 @@
-import * as userService from '../../services/users.services.js';
-
 async function isPlanPaid(req, res, next) {
     try {
-        const adminId = req.user._id; // ID del usuario autenticado obtenido del middleware `isLogin`
-        const adminUser = await userService.findById(adminId);
+        // `isLogin` ya dejo el documento completo en req.user; volver a pedirlo
+        // a Mongo era un viaje de ida y vuelta extra en cada escritura.
+        const adminUser = req.user;
 
         if (!adminUser) {
             return res.status(403).json({ message: 'Usuario no encontrado. Acceso denegado.' });

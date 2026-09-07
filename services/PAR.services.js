@@ -1,18 +1,11 @@
-import { MongoClient, ObjectId } from 'mongodb';
-import dotenv from 'dotenv';
-dotenv.config();
+import { ObjectId } from 'mongodb';
+import { client, db, connect } from './db.js';
 
-const options = { keepAlive: true };
-
-const client = new MongoClient(process.env.MONGODB_URI, options);
-const db = client.db('TOM');
 const par = db.collection('PAR');
 
 // ---------- Utils ----------
 async function ensureConn() {
-  if (!client.topology || client.topology.isDestroyed()) {
-    await client.connect();
-  }
+  await connect();
 }
 
 export async function closePARServiceConnectionForTests() {
@@ -259,10 +252,23 @@ export async function updatePAR(id, updatedPAR) {
 export async function deletePAR(id) {
   await ensureConn();
 
+  /* Un id con forma invalida no es un error del servidor: el que llama se
+     equivoco. Se distingue de "no existe" y de una falla real de la base. */
+  if (!ObjectId.isValid(id)) {
+    const error = new Error('El identificador del PAR es invalido.');
+    error.status = 400;
+    throw error;
+  }
+
   const filter = { _id: new ObjectId(id) };
   const result = await par.deleteOne(filter);
   if (result.deletedCount === 0) {
-    throw new Error('el PAR no fue encontrada o no se elimino.');
+    /* Que no exista es un 404, no una falla del servidor. Sin este status el
+       controlador lo reportaba como 500 y el entrenador veia un error grave
+       donde solo faltaba el documento. */
+    const error = new Error('El PAR no existe.');
+    error.status = 404;
+    throw error;
   }
   return { message: 'PAR eliminada exitosamente' };
 }

@@ -3,9 +3,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 import jwt from 'jsonwebtoken';
 import QRCode from 'qrcode';
-import * as UsersService from '../../services/users.services.js';
-import * as RoutineServices from '../../services/routine.services.js'
-import * as PARservices from '../../services/PAR.services.js'
+import * as UsersService from '../services/users.services.js';
+import * as RoutineServices from '../services/routine.services.js'
+import * as PARservices from '../services/PAR.services.js'
 import { getJwtSecret, issueSession, sanitizeUser } from '../lib/authSession.js'
 
 //HELPERS 
@@ -200,6 +200,31 @@ const serializeRoutineDoc = (doc = {}) => ({
 
 const serializeMany = (docs = []) => docs.map(serializeRoutineDoc);
 
+/* Version para ?fields=meta. serializeRoutineDoc siempre emite routine: [], y
+   con la proyeccion aplicada eso haria imposible distinguir "esta semana no
+   tiene dias" de "no pedi los dias". Aca el campo directamente no viaja. */
+const serializeWeekMeta = (doc = {}) => {
+  const { routine, ...resto } = doc;
+  const salida = {
+    ...resto,
+    _id: toPlainId(doc._id),
+    user_id: toPlainId(doc.user_id),
+    parent_par_id: toPlainId(doc.parent_par_id),
+    block_id: toPlainId(doc.block_id),
+  };
+
+  /* La proyeccion trae los dias con su _id y su nombre, sin ejercicios. Se
+     conservan porque la lista del alumno rotula con ellos los comentarios
+     semanales. Si no vinieran, el campo no se inventa. */
+  if (Array.isArray(routine)) {
+    salida.routine = routine.map((dia) => ({ ...dia, _id: toPlainId(dia?._id) }));
+  }
+
+  return salida;
+};
+
+const serializeManyMeta = (docs = []) => docs.map(serializeWeekMeta);
+
 
 // =================== LIST / FIND ===================
 
@@ -249,10 +274,14 @@ function getLastWeeksByUserIds(req, res) {
 
 function findRoutineByUserId(req, res){
   const id = req.params.userId
-  RoutineServices.getRoutineByUserId(id)
+  /* ?fields=meta devuelve las semanas sin su contenido, para los listados que
+     solo necesitan nombre, fecha y visibilidad. Cualquier otro valor -o ninguno-
+     mantiene la respuesta completa de siempre. */
+  const soloMeta = String(req.query.fields || '').toLowerCase() === 'meta'
+  RoutineServices.getRoutineByUserId(id, { soloMeta })
       .then(function(day){
           if(day){
-              res.status(200).json(serializeMany(day));
+              res.status(200).json(soloMeta ? serializeManyMeta(day) : serializeMany(day));
           } else{
               res.status(404).json({message: "Rutina no encontrada."})
           }
@@ -401,6 +430,82 @@ async function updateWeekProperties(req, res) {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Error al actualizar propiedades.', error: error.message });
+  }
+}
+
+// =================== ACCIONES MASIVAS (semanas) ===================
+
+const MAX_BULK_IDS = 200;
+const BULK_UPDATE_ALLOWED = ['visibility', 'block', 'block_id'];
+
+function parseBulkIds(rawIds) {
+  if (!Array.isArray(rawIds) || !rawIds.length) return null;
+  if (rawIds.length > MAX_BULK_IDS) return null;
+  const ids = [...new Set(rawIds.map(String))];
+  if (!ids.every((id) => ObjectId.isValid(id))) return null;
+  return ids;
+}
+
+async function bulkUpdateWeeks(req, res) {
+  const { userId, ids, patch } = req.body || {};
+
+  if (!userId || !ObjectId.isValid(userId)) {
+    return res.status(400).json({ message: 'userId invalido.' });
+  }
+
+  const weekIds = parseBulkIds(ids);
+  if (!weekIds) {
+    return res.status(400).json({ message: `Debe enviar entre 1 y ${MAX_BULK_IDS} ids de semana validos.` });
+  }
+
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    return res.status(400).json({ message: 'Debe enviar un objeto "patch" con propiedades a actualizar.' });
+  }
+
+  const partial = Object.keys(patch).reduce((acc, key) => {
+    if (BULK_UPDATE_ALLOWED.includes(key)) acc[key] = patch[key];
+    return acc;
+  }, {});
+
+  if (!Object.keys(partial).length) {
+    return res.status(400).json({ message: 'Ninguna propiedad valida para actualizar (visibility, block, block_id).' });
+  }
+
+  if ('visibility' in partial) {
+    partial.visible_at = partial.visibility === 'visible' ? new Date() : null;
+  }
+
+  try {
+    const result = await RoutineServices.updateManyWeekFields(userId, weekIds, partial);
+    return res.status(200).json({
+      message: 'Semanas actualizadas',
+      matched: result.matchedCount,
+      modified: result.modifiedCount
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Error al actualizar semanas.', error: error.message });
+  }
+}
+
+async function bulkDeleteWeeks(req, res) {
+  const { userId, ids } = req.body || {};
+
+  if (!userId || !ObjectId.isValid(userId)) {
+    return res.status(400).json({ message: 'userId invalido.' });
+  }
+
+  const weekIds = parseBulkIds(ids);
+  if (!weekIds) {
+    return res.status(400).json({ message: `Debe enviar entre 1 y ${MAX_BULK_IDS} ids de semana validos.` });
+  }
+
+  try {
+    const result = await RoutineServices.deleteManyWeeks(userId, weekIds);
+    return res.status(200).json({ message: 'Semanas eliminadas', deleted: result.deletedCount });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Error al eliminar semanas.', error: error.message });
   }
 }
 
@@ -584,10 +689,16 @@ function editById(req, res){
   const week_id = req.params.week_id
   const day_id = req.params.day_id
 
-  let exercise = {}
-  if(req.body){
-      exercise = req.body
+  /* El cuerpo se escribe tal cual en routine.$[day].exercises, que es un
+     arreglo. Si llega otra cosa, el dia queda deformado y a partir de ahi
+     cualquier lectura o clonado de esa semana falla. Se corta antes de escribir. */
+  if (!Array.isArray(req.body)) {
+    return res.status(400).json({
+      message: 'El cuerpo debe ser un arreglo de ejercicios.'
+    })
   }
+
+  const exercise = req.body
 
   RoutineServices.editExercise(week_id, day_id, exercise)
       .then(function(exercise) {
@@ -596,6 +707,11 @@ function editById(req, res){
           } else {
               res.status(404).json({ message: "Ejercicio no encontrado."})
           }
+      })
+      /* Sin este catch, un fallo del servicio quedaba como promesa sin manejar
+         y podia tumbar el proceso en vez de devolver un error. */
+      .catch(function(error) {
+        res.status(500).json({ message: error?.message || 'No se pudo guardar los ejercicios.' })
       })
 }
 
@@ -733,7 +849,10 @@ function deletePAR(req, res) {
           res.status(200).json(result);
       })
       .catch((err) => {
-          res.status(500).json({ error: err.message });
+          /* El servicio marca con status los casos que no son del servidor
+             (id invalido, PAR inexistente). El resto sigue siendo 500. */
+          const status = Number(err?.status) || 500;
+          res.status(status).json({ error: err.message });
       });
 }
 
@@ -840,7 +959,7 @@ async function createProgressionFromPARController(req, res) {
 
 // BLOCKS
 
-import * as BlockService from '../../services/block.services.js'
+import * as BlockService from '../services/block.services.js'
 
 async function getBlocksByUser(req, res) {
   const { userId } = req.params
@@ -873,7 +992,9 @@ async function generateUserQR(req, res) {
   const { userId } = req.params;
 
   try {
-    const user = await UsersService.findById(userId);
+    // ownsStudent ya lo busco y valido la pertenencia; reusamos ese documento
+    // en vez de volver a pegarle a la base por el mismo usuario.
+    const user = req.targetUser || await UsersService.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado." });
     }
@@ -967,6 +1088,8 @@ export {
 
   // NUEVO
   updateWeekProperties,
+  bulkUpdateWeeks,
+  bulkDeleteWeeks,
 
   generateUserQR,
   loginWithQR,

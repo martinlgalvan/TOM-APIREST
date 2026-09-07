@@ -7,6 +7,7 @@ import { ValidateLogin, ValidateRegister } from '../middleware/validar.middlewar
 import checkPlanLimit from '../middleware/checkPlanLimit.middleware.js'
 import isPlanPaid from '../middleware/isPlanPaid.middleware.js'
 import { skipForBlocks } from '../middleware/skipForBlocks.js'
+import { ownsStudent } from '../lib/authorization.js'
 
 const router = express.Router()
 
@@ -73,8 +74,13 @@ router.route('/api/block/:blockId')
 router.route('/api/user/:userId')
   // ✅ si queres que un usuario vea SU perfil, y admin vea cualquiera:
   .get([isLogin, selfOrAdmin('userId')], usersController.getUserById)
-  .delete([isLogin, isAdmin, isPlanPaid], usersController.removeUser)
-  .patch([isLogin, isAdmin, isPlanPaid], usersController.addUserProperty)
+  // ownsStudent: ademas de ser admin, el alumno tiene que ser TUYO.
+  .delete([isLogin, isAdmin, isPlanPaid, ownsStudent('userId')], usersController.removeUser)
+  .patch([isLogin, isAdmin, isPlanPaid, ownsStudent('userId')], usersController.addUserProperty)
+
+// ✅ NUEVO: el entrenador le define una contrasena nueva a SU alumno
+router.route('/api/user/:userId/password')
+  .patch([isLogin, isAdmin, ownsStudent('userId')], usersController.changeStudentPassword)
 
 // =========================
 // Openers (calendario deportivo)
@@ -85,13 +91,15 @@ router.route('/api/coach/:coachId/openers/templates')
 
 router.route('/api/user/:userId/openers/plans')
   .get([isLogin, selfOrAdmin('userId')], usersController.getOpenersPlansByUser)
-  .put([isLogin, isAdmin], usersController.saveOpenersPlansByUser)
+  .put([isLogin, isAdmin, ownsStudent('userId')], usersController.saveOpenersPlansByUser)
 
 // =========================
 // QR
 // =========================
+// El QR emite una sesion completa del alumno: sin ownsStudent, cualquier
+// entrenador podria generarse un QR para entrar como CUALQUIER usuario.
 router.get('/api/generate-qr/:userId',
-  [isLogin, isAdmin],
+  [isLogin, isAdmin, ownsStudent('userId')],
   ColumnController.generateUserQR
 )
 
@@ -145,8 +153,10 @@ router.delete('/api/announcements/:announcementId',
 // =========================
 // Payment info
 // =========================
+// El userId aca suele ser el propio entrenador (su config de pagos);
+// ownsStudent permite "uno mismo" y ademas cubre el caso alumno.
 router.patch('/api/user/:userId/payment-info',
-  [isLogin, isAdmin],
+  [isLogin, isAdmin, ownsStudent('userId')],
   usersController.updatePaymentInfo
 )
 

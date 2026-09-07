@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken'
-import * as userService from '../../services/users.services.js'
+import * as userService from '../services/users.services.js'
 import { getJwtSecret, issueRefreshSession } from '../lib/authSession.js'
 
 // Helpers

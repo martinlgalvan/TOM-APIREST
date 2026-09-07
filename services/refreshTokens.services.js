@@ -1,12 +1,6 @@
 import { ObjectId } from 'mongodb'
-import dotenv from 'dotenv'
-import { MongoClient } from 'mongodb'
 import crypto from 'crypto'
-
-dotenv.config()
-
-const client = new MongoClient(process.env.MONGODB_URI, { keepAlive: true })
-const db = client.db('TOM')
+import { client, db } from './db.js'
 
 // Nombre de coleccion (podes ajustarlo si queres)
 const refreshTokens = db.collection('RefreshTokens')

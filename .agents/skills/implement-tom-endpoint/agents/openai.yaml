@@ -1,0 +1,4 @@
+interface:
+  display_name: "TOM API: implementar endpoint"
+  short_description: "Implementa endpoints seguros en TOM API"
+  default_prompt: "Usa $implement-tom-endpoint para implementar este endpoint en TOM API."

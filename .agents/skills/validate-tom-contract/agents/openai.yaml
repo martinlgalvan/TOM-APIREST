@@ -1,0 +1,4 @@
+interface:
+  display_name: "TOM: validar contrato API"
+  short_description: "Valida contratos entre TOM API y TOM Front"
+  default_prompt: "Usa $validate-tom-contract para validar este contrato entre TOM API y TOM Front."

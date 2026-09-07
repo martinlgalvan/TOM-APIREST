@@ -1,9 +1,9 @@
 import jwt from 'jsonwebtoken'
 
-import * as UsersService from '../../services/users.services.js'
-import * as BlockService from '../../services/block.services.js'
-import * as RoutineServices from '../../services/routine.services.js'
-import * as RefreshTokenService from '../../services/refreshTokens.services.js'
+import * as UsersService from '../services/users.services.js'
+import * as BlockService from '../services/block.services.js'
+import * as RoutineServices from '../services/routine.services.js'
+import * as RefreshTokenService from '../services/refreshTokens.services.js'
 import {
   clearRefreshCookie,
   durationToMs,
@@ -13,7 +13,7 @@ import {
   issueSession,
   sanitizeUser
 } from '../lib/authSession.js'
-// import * as TokenService from '../../services/token.services.js'  // <- ya no se usa si JWT-only
+// import * as TokenService from '../services/token.services.js'  // <- ya no se usa si JWT-only
 
 //----------------------------------------------------*
 
@@ -248,6 +248,12 @@ function create(req, res) {
     role: "common"
   }
 
+  // La categoria se guarda junto con el alta; antes el front tenia que mandar
+  // un PATCH aparte apenas se creaba el alumno.
+  if (typeof req.body.category === 'string' && req.body.category.trim()) {
+    user.category = req.body.category.trim()
+  }
+
   UsersService.create(user, entrenador_id, logo)
     .then(user => {
       res.json(user)
@@ -269,12 +275,65 @@ function removeUser(req, res) {
     })
 }
 
+const MIN_PASSWORD_LENGTH = 6
+const MAX_PASSWORD_LENGTH = 128
+
+/**
+ * El entrenador le define una contrasena nueva a su alumno.
+ * La pertenencia (que el alumno sea de este entrenador) ya la valido el
+ * middleware `ownsStudent`, que ademas dejo el alumno en req.targetUser.
+ */
+async function changeStudentPassword(req, res) {
+  const target = req.targetUser
+  const { password, revokeSessions = true } = req.body || {}
+
+  if (typeof password !== 'string' || !password.trim()) {
+    return res.status(400).json({ code: 'PASSWORD_REQUIRED', message: 'Ingresa una contrasena nueva.' })
+  }
+
+  // Sin trim: un espacio al principio o al final es parte de la contrasena y
+  // recortarlo silenciosamente haria que el alumno no pueda entrar con lo que
+  // el entrenador ve en pantalla.
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({
+      code: 'PASSWORD_TOO_SHORT',
+      message: `La contrasena debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`
+    })
+  }
+
+  if (password.length > MAX_PASSWORD_LENGTH) {
+    return res.status(400).json({
+      code: 'PASSWORD_TOO_LONG',
+      message: `La contrasena no puede superar los ${MAX_PASSWORD_LENGTH} caracteres.`
+    })
+  }
+
+  try {
+    await UsersService.updateUserPassword(target._id, password)
+
+    let sessionsRevoked = false
+    if (revokeSessions) {
+      await RefreshTokenService.revokeAllForUser(target._id)
+      sessionsRevoked = true
+    }
+
+    return res.status(200).json({
+      message: 'Contrasena actualizada',
+      sessionsRevoked
+    })
+  } catch (error) {
+    console.error('[USERS] changeStudentPassword failed:', error?.message)
+    return res.status(error.status || 500).json({ message: error.message })
+  }
+}
+
 async function addUserProperty(req, res) {
   const userId = req.params.userId
   const category = req.body.category
 
   try {
-    const user = await UsersService.addUserProperty(userId, category)
+    // req.targetUser lo dejo ownsStudent: reusarlo evita un findById extra.
+    const user = await UsersService.addUserProperty(userId, category, req.targetUser)
     res.status(200).json({ message: `Propiedad '${category}' agregada correctamente al usuario`, user })
   } catch (error) {
     res.status(500).json({ message: error.message })
@@ -302,6 +361,18 @@ async function upsertUserDetails(req, res) {
 
   try {
     const { action, profile } = await UsersService.upsertUserDetails(userId, details)
+
+    // El perfil vive en `usersProfile` pero `category` vive en `Users`. Antes el
+    // front resolvia eso con DOS requests seguidos (este + PATCH /api/user/:id),
+    // y si el segundo fallaba quedaba el perfil guardado con la categoria vieja.
+    // Aceptando `category` aca las dos escrituras viajan en una sola request.
+    //
+    // Solo un entrenador puede tocar la categoria: este mismo endpoint lo usa el
+    // alumno para editar SU perfil, y la categoria se la asigna el entrenador.
+    if (req.user?.role === 'admin' && typeof details?.category === 'string' && details.category.trim()) {
+      await UsersService.addUserProperty(userId, details.category, req.targetUser)
+    }
+
     res.status(200).json({
       message: action === 'created' ? 'Perfil creado correctamente' : 'Perfil actualizado correctamente',
       action: action,
@@ -607,6 +678,7 @@ export {
   find,
   create,
   removeUser,
+  changeStudentPassword,
   login,
   logout,
   refresh,

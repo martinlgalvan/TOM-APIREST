@@ -1,13 +1,7 @@
-import { MongoClient, ObjectId } from 'mongodb'
+import { ObjectId } from 'mongodb'
 import {getDate} from './../date/formatedDate.js'
-import dotenv from 'dotenv';
+import { client, db } from './db.js'
 
-dotenv.config();
-
-const options = { keepAlive: true };
-
-const client = new MongoClient(process.env.MONGODB_URI,options)
-const db = client.db('TOM')
 const routine = db.collection('Routine')
 
 async function getRoutine(filter){
@@ -40,11 +34,34 @@ async function getLastWeekCreatedAtByUserIds(userObjectIds){
     });
 }
 
-async function getRoutineByUserId(id) {
+/* Campos que necesita un listado de semanas: lo que usa el navegador del alumno
+   y la tabla del entrenador, sin el arreglo "routine" con todos los dias y
+   ejercicios. Con 73 semanas la respuesta completa pesa 311kb y el listado usa
+   una fraccion. */
+const CAMPOS_META_SEMANA = {
+  name: 1,
+  visibility: 1,
+  user_id: 1,
+  created_at: 1,
+  createdAt: 1,
+  timestamp: 1,
+  block: 1,
+  block_id: 1,
+  /* Los dias, pero solo su identidad y su nombre: el peso real esta en
+     exercises, que no viaja. La lista del alumno los necesita para rotular los
+     comentarios semanales por dia; sin esto cada etiqueta caeria a "Dia". */
+  'routine._id': 1,
+  'routine.name': 1,
+}
+
+/* soloMeta omite el cuerpo de cada semana. Sin la opcion, la respuesta es la de
+   siempre: el contrato con TOM-front no cambia para quien no la pide. */
+async function getRoutineByUserId(id, { soloMeta = false } = {}) {
   return client.connect()
     .then(function() {
-      return routine.find({ user_id: new ObjectId(id) })
-      .sort({ "timestamp": -1}).toArray();
+      const cursor = routine.find({ user_id: new ObjectId(id) })
+      if (soloMeta) cursor.project(CAMPOS_META_SEMANA)
+      return cursor.sort({ "timestamp": -1}).toArray();
     });
 } 
 
@@ -886,6 +903,53 @@ async function updateWeekFields(
   return result;
 }
 
+/**
+ * Actualiza propiedades (visibility/block/block_id) de VARIAS semanas a la vez.
+ * Restringido por user_id para que un coach solo pueda tocar semanas de un alumno puntual.
+ */
+async function updateManyWeekFields(
+  userId,
+  weekIds,
+  partial,
+  allowedKeys = ['visibility', 'block', 'block_id', 'visible_at']
+) {
+  await client.connect();
+
+  const toSet = Object.keys(partial).reduce((acc, key) => {
+    if (allowedKeys.includes(key)) acc[key] = partial[key];
+    return acc;
+  }, {});
+
+  if (!Object.keys(toSet).length) {
+    throw new Error('No hay campos validos para actualizar.');
+  }
+
+  const objectIds = weekIds.map((id) => new ObjectId(id));
+
+  const result = await routine.updateMany(
+    { _id: { $in: objectIds }, user_id: new ObjectId(userId) },
+    { $set: { ...toSet, updated_at: new Date() } }
+  );
+
+  return result;
+}
+
+/**
+ * Elimina VARIAS semanas a la vez. Restringido por user_id (mismo motivo que updateManyWeekFields).
+ */
+async function deleteManyWeeks(userId, weekIds) {
+  await client.connect();
+
+  const objectIds = weekIds.map((id) => new ObjectId(id));
+
+  const result = await routine.deleteMany({
+    _id: { $in: objectIds },
+    user_id: new ObjectId(userId)
+  });
+
+  return result;
+}
+
 export {
   getRoutine,
   getRoutineById,
@@ -916,6 +980,8 @@ export {
 
   // NUEVO
   updateWeekFields,
-  
+  updateManyWeekFields,
+  deleteManyWeeks,
+
   createPAR
 }
