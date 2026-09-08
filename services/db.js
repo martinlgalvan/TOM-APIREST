@@ -12,7 +12,42 @@ dotenv.config()
  * uno solo. Con varias instancias concurrentes se agotan las conexiones del
  * cluster. Un unico cliente = un unico pool por instancia.
  */
-const client = new MongoClient(process.env.MONGODB_URI)
+/**
+ * TLS contra la base.
+ *
+ * El certificado del servidor lo firma una autoridad propia, asi que el driver
+ * necesita conocerla para poder validarlo. Viaja en MONGODB_CA como base64 y no
+ * como archivo suelto: en Vercel un archivo puede quedar fuera del paquete de
+ * la funcion, y eso falla en produccion pero no en local, que es la peor forma
+ * de enterarse.
+ *
+ * Si la variable no esta definida, no se activa nada y la conexion queda igual
+ * que antes. Asi se puede desplegar este codigo primero y prender el cifrado
+ * despues, sin que los dos pasos dependan uno del otro.
+ */
+/* La base en memoria de los tests corre en 127.0.0.1 y no habla TLS. Si el
+   cliente intenta cifrar contra ella, la conexion se cuelga hasta agotar el
+   tiempo -asi se cayeron 18 tests-.
+
+   Se mira el destino y no NODE_ENV: hay un test que fija NODE_ENV=production a
+   proposito para probar las cookies, y con esa guarda igual fallaba. Ademas el
+   certificado esta emitido para la IP del servidor, con lo cual validarlo
+   contra localhost no podria funcionar aunque se intentara. */
+function esDestinoLocal(uri) {
+  return /^mongodb(\+srv)?:\/\/(?:[^@]*@)?(localhost|127\.0\.0\.1|\[::1\])[:/]/i.test(uri || '')
+}
+
+function opcionesDeTls() {
+  const uri = process.env.MONGODB_URI || ''
+  if (esDestinoLocal(uri)) return {}
+
+  const ca = (process.env.MONGODB_CA || '').trim()
+  if (!ca) return {}
+
+  return { tls: true, ca: Buffer.from(ca, 'base64') }
+}
+
+const client = new MongoClient(process.env.MONGODB_URI, opcionesDeTls())
 const db = client.db('TOM')
 
 /**

@@ -3,6 +3,7 @@ import cors from 'cors'
 import cookieParser from 'cookie-parser'
 import WeekApiRoute from '../routes/week.api.routes.js'
 import UsersApiRoute from '../routes/users.api.routes.js'
+import AdminApiRoute from '../routes/admin.api.routes.js'
 
 const app = express()
 
@@ -65,6 +66,7 @@ app.use(cors({
 app.use(express.static('public'))
 app.use('/', UsersApiRoute)
 app.use('/', WeekApiRoute)
+app.use('/', AdminApiRoute)
 
 /* Ultimo middleware: cualquier error que se escape de un controlador se
    responde con su status en vez de propagarse y tumbar el proceso.

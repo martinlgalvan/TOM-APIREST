@@ -11,3 +11,10 @@ coverage
 
 # Copias de seguridad que generan los scripts de mantenimiento
 respaldos/
+
+# Credenciales que generan los scripts de mantenimiento. Nunca al repositorio.
+credencial-*.txt
+
+# Certificado de la CA de Mongo. Es publico, pero la app lo lee de la
+# variable MONGODB_CA, no de un archivo: tenerlo suelto confunde.
+mongo-ca.crt
