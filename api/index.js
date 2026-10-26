@@ -4,10 +4,15 @@ import cookieParser from 'cookie-parser'
 import WeekApiRoute from '../routes/week.api.routes.js'
 import UsersApiRoute from '../routes/users.api.routes.js'
 import AdminApiRoute from '../routes/admin.api.routes.js'
+import NutritionApiRoute from '../routes/nutrition.api.routes.js'
+import NutritionFoodsApiRoute from '../routes/nutrition.foods.api.routes.js'
 
 const app = express()
 
 app.use(express.urlencoded({ extended: true }))
+// Los planes incluyen valores nutricionales detallados; solo esta ruta necesita
+// un cuerpo mayor que el limite JSON estandar del resto de la API.
+app.use('/api/nutrition', express.json({ limit: '1mb' }))
 app.use(express.json())
 app.use(cookieParser())
 
@@ -67,6 +72,8 @@ app.use(express.static('public'))
 app.use('/', UsersApiRoute)
 app.use('/', WeekApiRoute)
 app.use('/', AdminApiRoute)
+app.use('/', NutritionApiRoute)
+app.use('/', NutritionFoodsApiRoute)
 
 /* Ultimo middleware: cualquier error que se escape de un controlador se
    responde con su status en vez de propagarse y tumbar el proceso.
